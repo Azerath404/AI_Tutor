@@ -18,20 +18,18 @@ class service {
     /** @var llm_client */
     private $client;
 
+    private $server_url;
+
     public function __construct() {
         // Lấy cấu hình từ Admin settings (Dependency Injection simulator)
-        $this->api_key = get_config('block_ai_tutor', 'gemini_apikey');
-        $this->model = get_config('block_ai_tutor', 'gemini_model') ?: 'gemini-1.5-flash';
-        $this->temperature = (float)get_config('block_ai_tutor', 'gemini_temperature') ?: 0.7;
-        $this->max_tokens = (int)get_config('block_ai_tutor', 'gemini_maxtokens') ?: 1000;
-
-        if (empty($this->api_key)) {
-            throw new \moodle_exception('apikeymissing', 'block_ai_tutor');
-        }
+        $this->server_url = get_config('block_ai_tutor', 'ollama_url') ?: 'http://localhost:11434';
+        $this->model = get_config('block_ai_tutor', 'ollama_model') ?: 'llama3.2';
+        $this->temperature = (float)get_config('block_ai_tutor', 'ollama_temperature') ?: 0.7;
+        $this->max_tokens = (int)get_config('block_ai_tutor', 'ollama_maxtokens') ?: 1000;
         
         // Khởi tạo các thành phần phụ thuộc (Dependencies)
         $this->repo = new repository();
-        $this->client = new llm_client($this->api_key, $this->model);
+        $this->client = new llm_client($this->server_url, $this->model);
     }
 
     /**
@@ -68,7 +66,7 @@ class service {
     /**
      * Gọi API Gemini (Integrator Layer)
      */
-    public function call_gemini($question, $system_prompt) {
+    public function call_llm($question, $system_prompt) {
         $final_prompt = $system_prompt . "\n\nCâu hỏi của sinh viên: " . $question;
 
         // Gọi Infrastructure Layer

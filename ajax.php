@@ -34,7 +34,7 @@ try {
     $systemPrompt = $aiService->build_context_prompt($courseId, $USER);
     
     // Bước 2.2: Gọi AI (Integrator logic)
-    $response = $aiService->call_gemini($question, $systemPrompt);
+    $response = $aiService->call_llm($question, $systemPrompt);
 
     // 3. OUTPUT: Trả về kết quả
     echo $response;

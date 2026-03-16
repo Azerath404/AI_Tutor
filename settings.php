@@ -6,51 +6,51 @@ if ($ADMIN->fulltree) {
     // 2. Thêm tiêu đề
     $settings->add(new admin_setting_heading(
         'block_ai_tutor/header',
-        get_string('headerconfig', 'block_ai_tutor'),
-        get_string('descconfig', 'block_ai_tutor')
+        'block_ai_tutor/header',
+        'Cấu hình Máy chủ Ollama (Local LLM)',
+        'Thiết lập kết nối tới máy chủ AI cục bộ để đảm bảo bảo mật dữ liệu.'
     ));
 
-    // 3. API Key (Giữ nguyên, đổi string)
+    // 3. Server URL
     $settings->add(new admin_setting_configtext(
-        'block_ai_tutor/gemini_apikey',
-        get_string('setting_apikey', 'block_ai_tutor'),
-        get_string('setting_apikey_desc', 'block_ai_tutor'),
-        '',
-        PARAM_TEXT
+        'block_ai_tutor/ollama_url',
+        'Ollama Server URL',
+        'Nhập địa chỉ máy chủ Ollama (Mặc định: http://localhost:11434).',
+        'http://localhost:11434',
+        PARAM_URL
     ));
 
-    // 4. Chọn Model (Dropdown) - FR1
+    // 4. Chọn Model (Dropdown)
     $models = [
-        'gemini-1.5-flash' => 'Gemini 1.5 Flash (Khuyên dùng - Ổn định)',
-        'gemini-1.5-pro' => 'Gemini 1.5 Pro (Ổn định)',
-        'gemini-3.1-pro-preview' => 'Gemini 3.1 Pro (Preview)',
-        'gemini-3-flash-preview' => 'Gemini 3 Flash (Preview)',
-        'gemini-3.1-flash-lite-preview' => 'Gemini 3.1 Flash Lite (Preview)',
-        'gemini-2.5-flash' => 'Gemini 2.5 Flash',
-        'gemini-2.5-pro' => 'Gemini 2.5 Pro',
+        'llama3.2' => 'LLaMA 3.2 (Bản nhẹ, chạy nhanh trên Laptop)',
+        'llama3.2:1b' => 'LLaMA 3.2 1B (Bản siêu nhẹ)',
+        'llama3' => 'LLaMA 3 8B (Yêu cầu có Card đồ họa)',
+        'qwen2.5' => 'Qwen 2.5 (Hỗ trợ tiếng Việt rất tốt)',
+        'mistral' => 'Mistral 7B',
     ];
+
     $settings->add(new admin_setting_configselect(
-        'block_ai_tutor/gemini_model',
-        get_string('setting_model', 'block_ai_tutor'),
-        get_string('setting_model_desc', 'block_ai_tutor'),
-        'gemini-1.5-flash', // Default
+        'block_ai_tutor/ollama_model',
+        'Chọn Mô hình (Model)',
+        'Chọn mô hình đã được pull về máy trong Ollama.',
+        'llama3.2', 
         $models
     ));
 
-    // 5. Temperature (Text - Validate Float) - FR1
+    // 5. Temperature
     $settings->add(new admin_setting_configtext(
-        'block_ai_tutor/gemini_temperature',
-        get_string('setting_temperature', 'block_ai_tutor'),
-        get_string('setting_temperature_desc', 'block_ai_tutor'),
+        'block_ai_tutor/ollama_temperature',
+        'Temperature (Độ sáng tạo)',
+        'Giá trị từ 0.0 (chính xác) đến 1.0 (sáng tạo). Khuyên dùng: 0.7',
         '0.7',
         PARAM_TEXT
     ));
 
-    // 6. Max Tokens (Text - Validate Int) - FR1
+    // 6. Max Tokens
     $settings->add(new admin_setting_configtext(
-        'block_ai_tutor/gemini_maxtokens',
-        get_string('setting_maxtokens', 'block_ai_tutor'),
-        get_string('setting_maxtokens_desc', 'block_ai_tutor'),
+        'block_ai_tutor/ollama_maxtokens',
+        'Max Output Tokens',
+        'Giới hạn độ dài câu trả lời. Ví dụ: 1000.',
         '1000',
         PARAM_INT
     ));

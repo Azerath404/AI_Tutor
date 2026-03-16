@@ -86,9 +86,9 @@ class block_ai_tutor extends block_base {
                     var loadingIndicator = document.getElementById("ai-typing-indicator");
                     if(loadingIndicator) loadingIndicator.remove();
                     
-                    // Lấy nội dung trả lời từ cấu trúc JSON của Gemini
-                    if (data.candidates && data.candidates[0].content) {
-                        var text = data.candidates[0].content.parts[0].text;
+                    // Lấy nội dung trả lời từ cấu trúc JSON của Ollama
+                    if (data.response !== undefined) {
+                        var text = data.response;
                         
                         // Format cơ bản (Markdown simple)
                         text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
@@ -96,15 +96,14 @@ class block_ai_tutor extends block_base {
                         
                         appendMessage("ai", text);
                     } else {
-                        // Xử lý hiển thị lỗi chi tiết
-                        var errorMsg = "Không có phản hồi";
+                        // Xử lý hiển thị lỗi
+                        var errorMsg = "Không có phản hồi từ LLaMA";
                         if (data.error) {
-                            // Nếu lỗi từ Google API thường là object chứa message
-                            errorMsg = (typeof data.error === \'object\' && data.error.message) ? data.error.message : JSON.stringify(data.error);
+                            errorMsg = (typeof data.error === "object" && data.error.message) ? data.error.message : JSON.stringify(data.error);
                         }
                         
                         appendMessage("ai", "❌ Lỗi: " + errorMsg);
-                        console.log(data);
+                        console.log("Dữ liệu lỗi:", data);
                     }
                 })
                 .catch(error => {
