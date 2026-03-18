@@ -32,6 +32,11 @@ class service {
         $this->client = new llm_client($this->server_url, $this->model);
     }
 
+    // Lộ repo ra ngoài để ajax.php có thể gọi lệnh lưu lịch sử
+    public function get_repo() {
+        return $this->repo;
+    }
+
     /**
      * Xây dựng ngữ cảnh (Context) cho Prompt dựa trên khóa học
      */
@@ -64,12 +69,27 @@ class service {
     }
 
     /**
-     * Gọi API Gemini (Integrator Layer)
+     * Gọi API LLM với Trí nhớ hội thoại và Streaming mode
      */
-    public function call_llm($question, $system_prompt) {
-        $final_prompt = $system_prompt . "\n\nCâu hỏi của sinh viên: " . $question;
+    public function call_llm($question, $system_prompt, $userId, $courseId) {
+        // 1. Lấy trí nhớ(3 tin nhắn gần nhất)
+        $history_records = $this->repo->get_chat_history($userId, $courseId, 3);
+        $history_prompt = "";
 
-        // Gọi Infrastructure Layer
+        if (!empty($history_records)) {
+            $history_prompt = "\n--- LỊCH SỬ HỘI THOẠI GẦN ĐÂY ---\n";
+            foreach ($history_records as $log) {
+                $role_name = ($log->role === 'user') ? 'Sinh viên' : 'AI';
+                $history_prompt .= "{$role_name}: {$log->message}\n";
+            }    
+            $history_prompt .= "---------------------------------\n";
+        }
+        // 2. Gộp prompt
+        $final_prompt = $system_prompt . "\n" . 
+                        $history_prompt . "\n" . 
+                        "Câu hỏi mới của sinh viên: " . $question;
+
+        // Gọi hàm Streaming ở Infrastructure
         return $this->client->generate_content($final_prompt, $this->temperature, $this->max_tokens);
     }
 }

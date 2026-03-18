@@ -25,35 +25,55 @@ class llm_client {
         $data = [
             "model" => $this->model,
             "prompt" => $prompt,
-            "stream" => false,
+            "stream" => true,
             "options" => [
                 "temperature" => $temperature,
-                "num_predicts" => $max_tokens
+                "num_predict" => $max_tokens
             ]
         ];
 
         $json_data = json_encode($data);
 
         $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, false); // Tắt chờ đồng bộ
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $json_data);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
-            'Content-Lengh: ' . strlen($json_data)
+            'Content-Length: ' . strlen($json_data)
             ]);
-        
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
 
-        $response = curl_exec($ch);
+        $full_response_text = ""; // Lưu toàn bộ câu để cho vào database sau khi xong
         
-        if ($response === false) {
-            $error = curl_error($ch);
-            curl_close($ch);
-            throw new \Exception('Lỗi kết nối Ollama Server: ' . $error);
-        }
-        
+        // Callback function: Mỗi khi Ollama trả về 1 chữ thì hàm chạy
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use (&$full_response_text){
+            $lines = explode("\n", trim($data));
+            foreach ($lines as $line) {
+                if(!empty($line)){
+                    $json = json_decode($line);
+                    if(isset($json->response)){
+                        $chunk = $json->response;
+                        $full_response_text .= $chunk;
+
+                        // Đóng gói theo chuẩn Server-Sent Events và đẩy đi ngay
+                        echo "data: " .json_encode(['text' => $chunk]) . "\n\n";
+                        ob_flush();
+                        flush();
+                    }
+                }
+            }
+            return strlen($data);
+        });
+
+        curl_exec($ch);
         curl_close($ch);
-        return $response;
+
+        // Gửi tín hiệu báo hiệu AI đã gõ xong
+        echo "data: [DONE]\n\n";
+        ob_flush();
+        flush();
+
+        // Trả về toàn bộ chuỗi cho file ajax.php lưu vào db
+        return $full_response_text;
     }
 }

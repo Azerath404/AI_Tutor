@@ -6,7 +6,6 @@ if ($ADMIN->fulltree) {
     // 2. Thêm tiêu đề
     $settings->add(new admin_setting_heading(
         'block_ai_tutor/header',
-        'block_ai_tutor/header',
         'Cấu hình Máy chủ Ollama (Local LLM)',
         'Thiết lập kết nối tới máy chủ AI cục bộ để đảm bảo bảo mật dữ liệu.'
     ));
