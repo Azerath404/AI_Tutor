@@ -57,60 +57,83 @@ class block_ai_tutor extends block_base {
                 history.scrollTop = history.scrollHeight; // Tự cuộn xuống dưới
             }
 
-            // Hàm xử lý gửi tin nhắn
+            // Hàm xử lý gửi tin nhắn (Bản hỗ trợ Streaming - Đã fix lỗi nháy)
             function sendAiQuestion() {
-                var question = document.getElementById("ai-question").value;
+                var questionInput = document.getElementById("ai-question");
+                var question = questionInput.value;
 
-                if (!question.trim()) {
-                    alert("Bạn chưa nhập câu hỏi!");
-                    return;
-                }
+                if (!question.trim()) { return; }
 
-                // 1. Hiện câu hỏi của User ngay lập tức
                 appendMessage("user", question);
-                document.getElementById("ai-question").value = ""; // Xóa ô nhập
+                questionInput.value = ""; 
                 
-                // 2. Hiện trạng thái đang nhập
                 var history = document.getElementById("ai-chat-history");
-                var loadingDiv = document.createElement("div");
-                loadingDiv.id = "ai-typing-indicator";
-                loadingDiv.innerHTML = "<em>⏳ AI đang soạn tin...</em>";
-                history.appendChild(loadingDiv);
+                
+                // Khởi tạo một khung chat trống cho AI trước
+                var msgDiv = document.createElement("div");
+                msgDiv.style.marginBottom = "10px";
+                msgDiv.style.padding = "8px";
+                msgDiv.style.borderRadius = "5px";
+                msgDiv.style.background = "#f1f0f0";
+                msgDiv.style.textAlign = "left";
+                
+                // ĐÃ SỬA: Thay nháy đơn thành nháy kép escape
+                msgDiv.innerHTML = "<strong>AI:</strong> <span class=\"ai-reply-content\">⏳ Đang suy nghĩ...</span>";
+                history.appendChild(msgDiv);
                 history.scrollTop = history.scrollHeight;
 
-                // Gọi sang file ajax.php
+                // ĐÃ SỬA: Thay nháy đơn thành nháy kép
+                var replySpan = msgDiv.querySelector(".ai-reply-content");
+                var fullText = ""; // Biến cộng dồn các chữ
+
+                // Dùng Fetch API chuẩn mới để đọc Stream
                 fetch("'.$ajaxUrlStr.'?question=" + encodeURIComponent(question) + "&course_id=' . $courseId . '")
-                .then(response => response.json())
-                .then(data => {
-                    // Xóa loading
-                    var loadingIndicator = document.getElementById("ai-typing-indicator");
-                    if(loadingIndicator) loadingIndicator.remove();
-                    
-                    // Lấy nội dung trả lời từ cấu trúc JSON của Ollama
-                    if (data.response !== undefined) {
-                        var text = data.response;
+                .then(async response => {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder("utf-8");
+                    replySpan.innerHTML = ""; 
+
+                    // Vòng lặp đọc liên tục cho đến khi xong
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
                         
-                        // Format cơ bản (Markdown simple)
-                        text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-                        text = text.replace(/\n/g, "<br>");
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk.split("\\n\\n"); // Tách các gói SSE
                         
-                        appendMessage("ai", text);
-                    } else {
-                        // Xử lý hiển thị lỗi
-                        var errorMsg = "Không có phản hồi từ LLaMA";
-                        if (data.error) {
-                            errorMsg = (typeof data.error === "object" && data.error.message) ? data.error.message : JSON.stringify(data.error);
+                        for (let line of lines) {
+                            if (line.startsWith("data: ")) {
+                                const dataStr = line.substring(6);
+                                
+                                if (dataStr === "[DONE]") {
+                                    break; // AI đã gõ xong
+                                }
+                                
+                                try {
+                                    const dataObj = JSON.parse(dataStr);
+                                    if(dataObj.error) {
+                                        replySpan.innerHTML += "❌ Lỗi: " + dataObj.error;
+                                        break;
+                                    }
+                                    
+                                    // Cộng thêm chữ mới vào tổng thể
+                                    fullText += dataObj.text;
+                                    
+                                    // Render Markdown cơ bản
+                                    let formattedText = fullText.replace(/\\*\\*(.*?)\\*\\*/g, "<strong>$1</strong>");
+                                    formattedText = formattedText.replace(/\\n/g, "<br>");
+                                    
+                                    replySpan.innerHTML = formattedText;
+                                    history.scrollTop = history.scrollHeight; // Cuộn xuống liên tục
+                                } catch (e) {
+                                    console.error("Lỗi parse gói tin:", e);
+                                }
+                            }
                         }
-                        
-                        appendMessage("ai", "❌ Lỗi: " + errorMsg);
-                        console.log("Dữ liệu lỗi:", data);
                     }
                 })
                 .catch(error => {
-                    var loadingIndicator = document.getElementById("ai-typing-indicator");
-                    if(loadingIndicator) loadingIndicator.remove();
-                    appendMessage("ai", "❌ Lỗi kết nối server.");
-                    console.error(error);
+                    replySpan.innerHTML = "❌ Lỗi kết nối máy chủ AI.";
                 });
             }
 
