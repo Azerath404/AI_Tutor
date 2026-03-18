@@ -2,6 +2,8 @@
 namespace block_ai_tutor;
 
 defined('MOODLE_INTERNAL') || die();
+// Nạp thư viện đọc PDF
+require_once(__DIR__ . '/../vendor/autoload.php');
 
 /**
  * Repository Layer: Chuyên trách truy xuất dữ liệu từ Moodle Database
