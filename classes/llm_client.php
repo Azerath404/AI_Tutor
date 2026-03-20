@@ -20,7 +20,7 @@ class llm_client {
      * Gửi request tới Ollama API
      */
     public function generate_content($prompt, $temperature = 0.7, $max_tokens = 1000) {
-        // THỦ PHẠM 2: Tăng thời gian sống của PHP lên 5 phút (300 giây) để chờ AI đọc file
+        // Tăng thời gian sống của PHP lên 5 phút (300 giây) để chờ AI đọc file
         set_time_limit(300); 
 
         $url = $this->server_url . "/api/generate";
@@ -89,7 +89,6 @@ class llm_client {
 
         curl_exec($ch);
         
-        // --- GIẢI QUYẾT THỦ PHẠM 1: VẮT KIỆT BỘ ĐỆM (FLUSH BUFFER) ---
         // Nếu kết nối bị ngắt đột ngột, ta lôi đoạn text kẹt trong buffer ra kiểm tra
         if (!empty(trim($buffer))) {
             $json = json_decode(trim($buffer));
