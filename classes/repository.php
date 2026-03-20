@@ -66,5 +66,24 @@ class repository {
         return [];
     }
 
-    
+    /**
+     * Xóa lịch sử chat của một người dùng trong một khóa học cụ thể
+     */
+    public function delete_chat_history($userId, $courseId) {
+        global $DB;
+        return $DB->delete_records('block_ai_tutor_logs', [
+            'userid' => $userId, 
+            'courseid' => $courseId
+        ]);
+    }
+
+    /**
+     * TỰ ĐỘNG: Xóa các tin nhắn cũ hơn N ngày (Dùng cho bảo trì hệ thống)
+     */
+    public function auto_purge_old_logs($days = 7) {
+        global $DB;
+        $cutOffTime = time() - ($days * 24 * 60 * 60);
+        $sql = "timecreated < ?";
+        return $DB->delete_records_select('block_ai_tutor_logs', $sql, [$cutOffTime]);
+    }
 }
