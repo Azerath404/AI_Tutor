@@ -1,4 +1,8 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 define('AJAX_SCRIPT', true);
 require('../../config.php');
 
@@ -39,7 +43,9 @@ try {
     $repo->save_chat_log($userId, $courseId, 'user', $question);
     
     // Bước 2.2: Gọi AI
-    $systemPrompt = $aiService->build_context_prompt($courseId, $USER);
+    $systemPrompt = $aiService->build_context_prompt($courseId, $USER, $question);
+    // THÊM DÒNG NÀY ĐỂ DEBUG: In toàn bộ Prompt (bao gồm cả nội dung PDF) vào file log của XAMPP
+    file_put_contents(__DIR__ . '/prompt_debug.txt', "=== LẦN CHAT LÚC " . date('H:i:s') . " ===\n" . $systemPrompt . "\n\n", FILE_APPEND);
     $full_ai_answer = $aiService->call_llm($question, $systemPrompt, $userId, $courseId);
     
     // 3. Sau khi AI gõ xong, lưu toàn bộ câu trả lời vào db
