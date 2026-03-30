@@ -20,8 +20,8 @@ class llm_client {
      * Gửi request tới Ollama API
      */
     public function generate_content($prompt, $temperature = 0.7, $max_tokens = 1000) {
-        // Tăng thời gian sống của PHP lên 5 phút (300 giây) để chờ AI đọc file
-        set_time_limit(300); 
+        // Tăng thời gian sống của PHP lên 10 phút (600 giây) để chờ AI đọc file và xử lý
+        set_time_limit(600); 
 
         $url = $this->server_url . "/api/generate";
         
@@ -35,7 +35,7 @@ class llm_client {
             "options" => [
                 "temperature" => $temperature,
                 "num_predict" => $max_tokens,
-                "num_ctx" => 16384 
+                "num_ctx" => 8192
             ]
         ];
 
@@ -43,7 +43,7 @@ class llm_client {
         
         if ($json_data === false) {
             echo "data: " . json_encode(['error' => 'Lỗi mã hóa JSON: ' . json_last_error_msg()]) . "\n\n";
-            ob_flush(); flush();
+            @ob_flush(); flush();
             return "";
         }
 
@@ -51,6 +51,8 @@ class llm_client {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, false); 
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $json_data);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 600); // Tăng timeout của cURL lên 10 phút
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
             'Content-Length: ' . strlen($json_data)
@@ -71,7 +73,7 @@ class llm_client {
                     
                     if (isset($json->error)) {
                         echo "data: " . json_encode(['error' => 'Lỗi từ Ollama: ' . $json->error]) . "\n\n";
-                        ob_flush(); flush();
+                        @ob_flush(); flush();
                         continue;
                     }
 
@@ -80,7 +82,7 @@ class llm_client {
                         $full_response_text .= $chunk;
 
                         echo "data: " . json_encode(['text' => $chunk]) . "\n\n";
-                        ob_flush(); flush();
+                        @ob_flush(); flush();
                     }
                 }
             }
@@ -94,24 +96,24 @@ class llm_client {
             $json = json_decode(trim($buffer));
             if ($json && isset($json->error)) {
                 echo "data: " . json_encode(['error' => 'Ollama Crash (Kẹt đệm): ' . $json->error]) . "\n\n";
-                ob_flush(); flush();
+                @ob_flush(); flush();
             } else if (!$json) {
                 // Nếu Ollama ném ra lỗi thô (HTTP 500/404) không phải dạng JSON
                 $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 echo "data: " . json_encode(['error' => "Máy chủ AI từ chối (HTTP $http_code): " . strip_tags(trim($buffer))]) . "\n\n";
-                ob_flush(); flush();
+                @ob_flush(); flush();
             }
         }
         
         if (curl_errno($ch)) {
             echo "data: " . json_encode(['error' => 'Lỗi đường truyền mạng: ' . curl_error($ch)]) . "\n\n";
-            ob_flush(); flush();
+            @ob_flush(); flush();
         }
 
         curl_close($ch);
 
         echo "data: [DONE]\n\n";
-        ob_flush(); flush();
+        @ob_flush(); flush();
 
         return $full_response_text;
     }

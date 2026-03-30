@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="blocks/ai_tutor/db" VERSION="20240310" COMMENT="XMLDB file for Moodle block_ai_tutor"
+<XMLDB PATH="blocks/ai_tutor/db" VERSION="20260326" COMMENT="XMLDB file for Moodle block_ai_tutor"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
   <TABLES>
-    <TABLE NAME="block_ai_tutor_logs" COMMENT="Lưu trữ lịch sử chat của AI Tutor">
+    <TABLE NAME="block_ai_tutor_logs" COMMENT="Luu tru lich su chat cua AI Tutor">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="role" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="user hoặc ai"/>
+        <FIELD NAME="role" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="user hoac ai"/>
         <FIELD NAME="message" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
@@ -18,6 +18,20 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="user_course_idx" UNIQUE="false" FIELDS="userid, courseid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="block_ai_tutor_course_deps" COMMENT="Luu lien ket mon hoc tien quyet">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="course_id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="ID mon hoc hien tai"/>
+        <FIELD NAME="prerequisite_id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="ID mon hoc tien quyet"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="course_idx" UNIQUE="false" FIELDS="course_id"/>
       </INDEXES>
     </TABLE>
   </TABLES>

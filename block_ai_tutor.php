@@ -17,14 +17,11 @@ class block_ai_tutor extends block_base {
 
         $this->content = new stdClass;
         
-        // Khởi tạo service để thực hiện tự động dọn dẹp log cũ (ví dụ > 7 ngày)
-        // Việc này giúp hệ thống luôn gọn nhẹ mà không cần setup Cron job phức tạp
+        // Khởi tạo service để thực hiện tự động dọn dẹp log cũ
         try {
             $service = new \block_ai_tutor\service();
             $service->get_repo()->auto_purge_old_logs(7); 
-        } catch (\Exception $e) {
-            // Bỏ qua nếu có lỗi khởi tạo để không làm sập giao diện
-        }
+        } catch (\Exception $e) { }
 
         $ajaxUrl = new moodle_url('/blocks/ai_tutor/ajax.php');
         $ajaxUrlStr = $ajaxUrl->out(false); 
@@ -33,9 +30,37 @@ class block_ai_tutor extends block_base {
         $deleteUrlStr = $deleteUrl->out(false);
 
         $courseId = $this->page->course->id;
-        $userId = $USER->id;
+        $context = context_course::instance($courseId);
+
+        // --- LẤY LỊCH SỬ CHAT ĐỂ HIỂN THỊ LẠI ---
+        $history_records = [];
+        try {
+            // Sử dụng lại service đã có nếu tồn tại, hoặc tạo repo mới
+            if (!isset($service)) {
+                $repo = new \block_ai_tutor\repository();
+            } else {
+                $repo = $service->get_repo();
+            }
+            // Lấy 20 tin nhắn gần nhất để hiển thị lại
+            $history_records = $repo->get_chat_history($USER->id, $courseId, 20);
+        } catch (\Exception $e) { /* Bỏ qua nếu có lỗi DB */ }
         
-        $this->content->text = '
+        // Encode an toàn để nhúng vào Javascript
+        $historyJson = json_encode($history_records, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+        
+        // --- PHẦN XỬ LÝ NÚT THIẾT LẬP ---
+        $adminHtml = '';
+        if (has_capability('moodle/course:update', $context)) {
+            $manageUrl = new moodle_url('/blocks/ai_tutor/manage_links.php', array('courseid' => $courseId));
+            $adminHtml = '
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
+                    <a href="' . $manageUrl->out(false) . '" class="btn btn-sm btn-outline-secondary w-100" style="font-size: 0.8em;">
+                        ⚙ Thiết lập môn tiên quyết
+                    </a>
+                </div>';
+        }
+
+        $this->content->text = <<<HTML
             <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
             <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -103,10 +128,6 @@ class block_ai_tutor extends block_base {
                     overflow-x: auto;
                     margin: 10px 0;
                 }
-                .msg-ai code {
-                    font-family: Consolas, Monaco, monospace;
-                    font-size: 13px;
-                }
             </style>
 
             <div style="padding:5px;">
@@ -121,28 +142,72 @@ class block_ai_tutor extends block_base {
                 
                 <textarea id="ai-question" class="form-control" rows="2" placeholder="Hỏi gì đi (Nhấn Enter để gửi)..."></textarea>
                 <button id="ai-btn-send" class="btn btn-primary mt-2" style="width:100%">🚀 Gửi câu hỏi</button>
+                
+                {$adminHtml}
             </div>
 
             <script>
             marked.use({ breaks: true, gfm: true });
+            const initialHistory = {$historyJson};
+
+            /**
+             * Tải và hiển thị lịch sử chat đã có khi người dùng tải lại trang.
+             */
+            function loadInitialHistory() {
+                const history = document.getElementById("ai-chat-history");
+                if (initialHistory && initialHistory.length > 0) {
+                    history.innerHTML = ''; // Xóa tin nhắn mặc định "Bắt đầu trò chuyện..."
+                    
+                    initialHistory.forEach(log => {
+                        const msgDiv = document.createElement("div");
+                        const sender = log.role;
+                        const text = log.message;
+
+                        msgDiv.className = "chat-msg " + (sender === "user" ? "msg-user" : "msg-ai");
+                        
+                        let content = '';
+                        if (sender === 'user') {
+                            // Mã hóa text của người dùng để tránh lỗi hiển thị và XSS
+                            const temp = document.createElement('div');
+                            temp.textContent = text;
+                            content = temp.innerHTML;
+                        } else {
+                            // Parse markdown cho tin nhắn của AI
+                            content = marked.parse(text || '');
+                        }
+
+                        const senderName = sender === "user" ? "Bạn" : "AI";
+                        msgDiv.innerHTML = `<strong>\${senderName}:</strong><br>\${content}`;
+                        
+                        history.appendChild(msgDiv);
+                    });
+
+                    // Chạy highlight syntax cho các khối code trong lịch sử
+                    history.querySelectorAll("pre code").forEach((block) => {
+                        hljs.highlightElement(block);
+                    });
+
+                    history.scrollTop = history.scrollHeight; // Cuộn xuống cuối
+                }
+            }
 
             function appendMessage(sender, text) {
                 var history = document.getElementById("ai-chat-history");
                 var msgDiv = document.createElement("div");
                 msgDiv.className = "chat-msg " + (sender === "user" ? "msg-user" : "msg-ai");
-                msgDiv.innerHTML = "<strong>" + (sender === "user" ? "Bạn" : "AI") + ":</strong><br>" + text;
+                msgDiv.innerHTML = "<strong>" + (sender === "user" ? "Bạn" : "AI") + ":</strong><br>";
+                msgDiv.appendChild(document.createTextNode(text)); // An toàn hơn để tránh XSS
                 history.appendChild(msgDiv);
                 history.scrollTop = history.scrollHeight;
             }
 
-            // Xử lý nút Xóa lịch sử
             document.getElementById("ai-btn-clear").addEventListener("click", function() {
                 if (confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử trò chuyện trong môn này không?")) {
-                    fetch("' . $deleteUrlStr . '?course_id=' . $courseId . '")
+                    fetch("{$deleteUrlStr}?course_id={$courseId}")
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            document.getElementById("ai-chat-history").innerHTML = \'<div style="color: #666; font-style: italic; font-size: 0.9em; text-align: center; width: 100%;">Đã xóa lịch sử. Bắt đầu phiên mới...</div>\';
+                            document.getElementById("ai-chat-history").innerHTML = '<div style="color: #666; font-style: italic; font-size: 0.9em; text-align: center; width: 100%;">Đã xóa lịch sử. Bắt đầu phiên mới...</div>';
                         } else {
                             alert("Có lỗi xảy ra khi xóa lịch sử.");
                         }
@@ -169,7 +234,7 @@ class block_ai_tutor extends block_base {
                 var replySpan = msgDiv.querySelector(".ai-reply-content");
                 var fullText = ""; 
 
-                fetch("' . $ajaxUrlStr . '?question=" + encodeURIComponent(question) + "&course_id=' . $courseId . '")
+                fetch("{$ajaxUrlStr}?question=" + encodeURIComponent(question) + "&course_id={$courseId}")
                 .then(async response => {
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder("utf-8");
@@ -190,7 +255,7 @@ class block_ai_tutor extends block_base {
                                 try {
                                     const dataObj = JSON.parse(dataStr);
                                     if(dataObj.error) {
-                                        replySpan.innerHTML += "<br><span style=\'color:red\'>❌ Lỗi: " + dataObj.error + "</span>";
+                                        replySpan.innerHTML += "<br><span style='color:red'>❌ Lỗi: " + dataObj.error + "</span>";
                                         break;
                                     }
                                     fullText += dataObj.text;
@@ -216,8 +281,11 @@ class block_ai_tutor extends block_base {
                     sendAiQuestion();
                 }
             });
+
+            // Tải lịch sử trò chuyện ngay khi block được render
+            loadInitialHistory();
             </script>
-        ';
+        HTML;
         
         return $this->content;
     }

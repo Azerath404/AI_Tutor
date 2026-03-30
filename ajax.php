@@ -1,4 +1,5 @@
 <?php
+set_time_limit(0);
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -18,6 +19,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache');
 header('Connection: keep-alive');
+header('X-Accel-Buffering: no');
 // Xóa bộ đệm đầu ra để đảm bảo không có HTML thừa (ví dụ warning của Moodle) lọt vào JSON
 while (ob_get_level()) {
     ob_end_clean();
@@ -45,7 +47,7 @@ try {
     // Bước 2.2: Gọi AI
     $systemPrompt = $aiService->build_context_prompt($courseId, $USER, $question);
     // THÊM DÒNG NÀY ĐỂ DEBUG: In toàn bộ Prompt (bao gồm cả nội dung PDF) vào file log của XAMPP
-    file_put_contents(__DIR__ . '/prompt_debug.txt', "=== LẦN CHAT LÚC " . date('H:i:s') . " ===\n" . $systemPrompt . "\n\n", FILE_APPEND);
+    file_put_contents(__DIR__ . '/data/prompt_debug.txt', "=== LẦN CHAT LÚC " . date('H:i:s') . " ===\n" . $systemPrompt . "\n\n", FILE_APPEND);
     $full_ai_answer = $aiService->call_llm($question, $systemPrompt, $userId, $courseId);
     
     // 3. Sau khi AI gõ xong, lưu toàn bộ câu trả lời vào db
@@ -53,7 +55,7 @@ try {
         $repo->save_chat_log($userId, $courseId, 'ai', $full_ai_answer);
     }
 
-} catch (Exception $e) {
+} catch (\Throwable $e) {
     // Nếu có lỗi, trả về JSON báo lỗi
     echo "data: " . json_encode(['error' => $e->getMessage()]) . "\n\n";
 }
