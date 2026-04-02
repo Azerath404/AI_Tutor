@@ -5,34 +5,84 @@ defined('MOODLE_INTERNAL') || die();
 
 class observer {
     /**
-     * Lên lịch tác vụ ad-hoc để tạo lại cache ngay lập tức.
-     *
-     * @param \core\event\base $event
+     * Tự động thêm block AI Tutor khi tạo khóa học mới
      */
-    public static function schedule_cache_regeneration(\core\event\base $event) {
-        // Lấy thông tin module từ sự kiện
-        $other = $event->get_data()['other'] ?? [];
-        $modname = $event->other['modulename'] ?? $event->objectname;
-
-        // Danh sách các module chứa tài liệu cần cache
-        $allowed_modules = ['resource', 'folder'];
-
-        if (!in_array($modname, $allowed_modules)) {
-            return;
-        }
-
+    public static function auto_add_ai_block(\core\event\course_created $event) {
+        global $DB;
         $courseid = $event->courseid;
-        if (!$courseid) {
-            return;
+        $context = \context_course::instance($courseid);
+
+        $exists = $DB->record_exists('block_instances', [
+            'blockname' => 'ai_tutor',
+            'parentcontextid' => $context->id
+        ]);
+
+        if (!$exists) {
+            $block = new \stdClass();
+            $block->blockname       = 'ai_tutor';
+            $block->parentcontextid = $context->id;
+            $block->showinsubcontexts = 0;
+            $block->pagetypepattern   = 'course-view-*';
+            $block->defaultregion     = 'side-pre';
+            $block->defaultweight     = 0;
+            $block->timecreated       = time();
+            $block->timemodified      = time();
+
+            $DB->insert_record('block_instances', $block);
+        }
+    }
+
+    public static function handle_content_change(\core\event\base $event) {
+        global $CFG, $DB;
+
+        $courseid = null;
+
+        // 1. Tìm Course ID bằng mọi cách có thể
+        if (isset($event->courseid) && $event->courseid > 0) {
+            $courseid = $event->courseid;
+        } else {
+            // Nếu xóa module ngoài trang chính, Moodle thường để thông tin trong context hoặc snapshot
+            $filedata = $event->get_record_snapshot('files', $event->objectid);
+            if ($filedata) {
+                $context = \context::instance_by_id($filedata->contextid);
+                if ($context->contextlevel == CONTEXT_COURSE) {
+                    $courseid = $context->instanceid;
+                } else if ($context->contextlevel == CONTEXT_MODULE) {
+                    $courseid = $DB->get_field('course_modules', 'course', ['id' => $context->instanceid]);
+                }
+            }
         }
 
-        // Tạo instance của adhoc_task
-        $task = new \block_ai_tutor\task\regenerate_cache();
-        
-        // Truyền Course ID vào task để nó chỉ xử lý đúng khóa học đó
-        $task->set_custom_data(['courseid' => $courseid]);
-        
-        // Đưa vào hàng đợi để Moodle Cron xử lý ngầm sớm nhất có thể
-        \core\task\manager::queue_adhoc_task($task);
+        // Trường hợp đặc biệt: Xóa Course Module (Cái Long đang làm)
+        if (!$courseid && strpos($event->eventname, 'course_module_deleted') !== false) {
+            $courseid = $event->get_data()['courseid'] ?? null;
+        }
+
+        if ($courseid) {
+            $cache_file = $CFG->dirroot . '/blocks/ai_tutor/data/cache_course_' . $courseid . '.json';
+
+            // 2. THỰC HIỆN XÓA CACHE (Dù là Thêm hay Xóa file trên Moodle)
+            if (file_exists($cache_file)) {
+                // Ép xóa file bằng cách xóa cache trong bộ nhớ PHP trước
+                clearstatcache(); 
+                if (@unlink($cache_file)) {
+                    error_log("AI Tutor: Đã xóa thành công cache Course $courseid");
+                } else {
+                    error_log("AI Tutor: Lỗi quyền xóa file tại $cache_file");
+                }
+            }
+
+            // 3. CHỈ TẠO LẠI NẾU KHÔNG PHẢI SỰ KIỆN XÓA
+            // Kiểm tra cả 'deleted' trong tên event
+            if (strpos($event->eventname, 'deleted') === false) {
+                $course_obj = $DB->get_record('course', array('id' => $courseid));
+                $parser = new \block_ai_tutor\document_parser();
+                $chunks = $parser->get_pdf_content_from_course($course_obj);
+                
+                if (!empty($chunks)) {
+                    file_put_contents($cache_file, json_encode($chunks, JSON_UNESCAPED_UNICODE));
+                }
+            }
+        }
     }
 }

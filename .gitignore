@@ -17,3 +17,9 @@ Thumbs.db
 
 # Log files
 *.log
+
+# Dependency directories
+vendor/
+
+# Local data and cache
+blocks/ai_tutor/data/

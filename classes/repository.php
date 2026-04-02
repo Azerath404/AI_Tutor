@@ -38,11 +38,11 @@ class repository {
     /**
      * Lưu tin nhắn vào database
      */
-    public function save_chat_log($userId, $courseId, $role, $message){
+    public function save_chat_log($userId, $courseId, $role, $message) {
         global $DB;
         $record = new \stdClass();
-        $record->userId = $userId;
-        $record->courseId = $courseId;
+        $record->userid = (int)$userId;   
+        $record->courseid = (int)$courseId;
         $record->role = $role;
         $record->message = $message;
         $record->timecreated = time();
@@ -53,17 +53,13 @@ class repository {
     /**
      * Lấy N tin nhắn gần nhất của Sinh viên trong khóa học này
      */
-    public function get_chat_history($userId, $courseId, $limit = 5){
+    public function get_chat_history($userId, $courseId, $limit = 5) {
         global $DB;
-        // Lấy $limit tin nhắn mới nhất, sắp xếp theo thời gian
         $query = "SELECT * FROM {block_ai_tutor_logs} 
-                WHERE userid = ? AND courseid = ? 
-                ORDER BY timecreated DESC, id DESC";
-        $records = $DB->get_records_sql($query, [$userId, $courseId], 0, $limit);
-        if ($records){
-            return array_reverse($records);
-        }
-        return [];
+                  WHERE userid = ? AND courseid = ? 
+                  ORDER BY timecreated DESC, id DESC";
+        $records = $DB->get_records_sql($query, [(int)$userId, (int)$courseId], 0, $limit);
+        return $records ? array_reverse($records) : [];
     }
 
     /**
