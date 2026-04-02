@@ -10,41 +10,48 @@ class rag_engine {
             return "";
         }
 
-        // 1. Tổng hợp truy vấn từ lịch sử để giữ ngữ cảnh
-        $search_query = $question;
+        // 1. Tổng hợp truy vấn và mở rộng từ khóa liên kết (Query Expansion)
+        $search_query = mb_strtolower($question);
         if (!empty($recent_history)) {
-            foreach (array_slice($recent_history, -2) as $log) { // Chỉ lấy 2 câu gần nhất để tránh loãng
+            foreach (array_slice($recent_history, -2) as $log) {
                 if ($log->role === 'user') {
-                    $search_query .= " " . $log->message;
+                    $search_query .= " " . mb_strtolower($log->message);
                 }
             }
         }
 
-        // 2. Lọc Stop Words & Trích xuất từ khóa chuyên sâu
-        $stop_words = ['có', 'không', 'là', 'gì', 'của', 'về', 'việc', 'các', 'một', 'nội', 'dung', 'nào', 'sao', 'ai', 'cho', 'trong', 'những', 'tất', 'cả', 'tập', 'còn', 'thì', 'đâu', 'như', 'thế', 'này', 'tôi', 'bạn', 'xin', 'hãy', 'đó', 'tài', 'liệu', 'tóm', 'tắt'];
+        // 2. Lọc Stop Words & Chuẩn hóa từ khóa
+        $stop_words = ['có', 'không', 'là', 'gì', 'của', 'về', 'việc', 'các', 'một', 'nội', 'dung', 'nào', 'sao', 'ai', 'cho', 'trong', 'những', 'tất', 'cả', 'tập', 'còn', 'thì', 'đâu', 'như', 'thế', 'này', 'tôi', 'bạn', 'xin', 'hãy', 'đó', 'tài', 'liệu', 'tóm', 'tắt', 'giữa', 'liên', 'hệ', 'khác', 'nhau'];
         
-        // Giữ lại dấu ngoặc () trong quá trình làm sạch để nhận diện hàm
-        $clean_query = str_replace(['?', '.', ',', '!', ':', '"', '\''], '', mb_strtolower($search_query));
+        $clean_query = str_replace(['?', '.', ',', '!', ':', '"', '\''], '', $search_query);
         $words = explode(' ', $clean_query);
         
         $keywords = [];
         foreach ($words as $word) {
             $word = trim($word);
-            // Loại bỏ dấu ngoặc ở cuối để lấy tên hàm thuần túy làm từ khóa
             $pure_word = rtrim($word, '()');
             if (!in_array($pure_word, $stop_words) && (mb_strlen($pure_word) >= 2 || is_numeric($pure_word))) {
                 $keywords[] = $pure_word;
             }
         }
-        $keywords = array_unique($keywords);
 
-        // --- TRÍCH XUẤT SỐ CHƯƠNG (Metadata Boosting) ---
-        $target_number = null;
-        if (preg_match('/(?:file|bài|chương)\s*(\d+)/i', mb_strtolower($search_query), $matches)) {
-            $target_number = $matches[1];
+        // Tự động thêm từ khóa bổ trợ để tăng tính tổng quát khi hỏi về mối liên hệ
+        if (strpos($search_query, 'liên hệ') !== false || strpos($search_query, 'khác nhau') !== false) {
+            $keywords[] = 'đối tượng';
+            $keywords[] = 'cấu trúc';
+            $keywords[] = 'phương thức';
+            $keywords[] = 'hàm';
         }
-
-        // 3. CHẤM ĐIỂM (SCORING) VỚI TRỌNG SỐ MỚI
+        $keywords = array_unique($keywords);
+        $folder_keywords = ['bổ trợ', 'tham khảo', 'bài giảng', 'lab'];
+        $target_folder = '';
+        foreach ($folder_keywords as $fk) {
+            if (mb_stripos($search_query, $fk) !== false) {
+                $target_folder = $fk;
+                break;
+            }
+        }
+        // 3. CHẤM ĐIỂM (SCORING) - THUẬT TOÁN TỔNG QUÁT HÓA
         $scored_chunks = [];
         foreach ($chunks as $chunk_data) {
             $chunk_text = $chunk_data['content'] ?? '';
@@ -53,52 +60,50 @@ class rag_engine {
             $score = 0;
             $file_name = mb_strtolower($chunk_data['file']);
             $chunk_lower = mb_strtolower($chunk_text);
-
-            // BƯỚC A: SIÊU ƯU TIÊN THEO SỐ FILE (Quan trọng cho kịch bản 1)
-            if ($target_number !== null && strpos($file_name, $target_number) !== false) {
-                $score += 250.0; // Tăng vọt lên 250 điểm để ép đoạn này vào Top 1
-            }
-
             foreach ($keywords as $kw) {
-                // BƯỚC B: BOOSTING TỪ KHÓA TRONG TÊN FILE
+                if (!empty($target_folder) && mb_stripos($file_name, $target_folder) !== false) {
+                    $score += 500.0; // Điểm thưởng cực cao để ép AI chỉ lấy file này
+                }
+                // A. Khớp trong tên file (Trọng số cao cho tính liên quan trực tiếp)
                 if (mb_stripos($file_name, $kw) !== false) {
-                    $score += 50.0; 
+                    $score += 40.0; 
                 }
 
-                // BƯỚC C: CHẤM ĐIỂM NỘI DUNG
+                // B. Khớp trong nội dung (Diversity Boost)
                 $count = mb_substr_count($chunk_lower, $kw);
                 if ($count > 0) {
-                    $score += 20; // Điểm cơ bản khi khớp từ khóa
-                    $score += ($count * 2); 
+                    $score += 30.0; // Điểm thưởng vì CÓ xuất hiện từ khóa (Quan trọng hơn tần suất)
+                    $score += (min($count, 3) * 5); // Tối đa 15 điểm cho tần suất để tránh "spam" từ khóa
                 }
 
-                // BƯỚC D: NHẬN DIỆN CẤU TRÚC HÀM (FIX LỖI AI KHÔNG THẤY HÀM SOUND)
-                // Regex tìm kiếm "kw(" hoặc "def kw"
-                if (preg_match('/' . preg_quote($kw, '/') . '\s*\(/i', $chunk_lower) || 
-                    preg_match('/def\s+' . preg_quote($kw, '/') . '/i', $chunk_lower)) {
-                    $score += 100.0; // Thưởng cực cao cho các đoạn chứa định nghĩa/gọi hàm
+                // C. Nhận diện cấu trúc kỹ thuật (Hàm/Lớp)
+                if (preg_match('/' . preg_quote($kw, '/') . '\s*\(/i', $chunk_lower)) {
+                    $score += 60.0; 
                 }
             }
 
             if ($score > 0) {
-                $scored_chunks[] = ['text' => $chunk_text, 'score' => $score];
+                // Lưu thêm metadata nguồn để AI dễ trích dẫn
+                $scored_chunks[] = [
+                    'text' => "[Nguồn: " . $chunk_data['file'] . "]\n" . $chunk_text, 
+                    'score' => $score
+                ];
             }
         }
 
-        // 4. Ranking (Sắp xếp)
+        // 4. Ranking
         usort($scored_chunks, function($a, $b) {
             return $b['score'] <=> $a['score'];
         });
 
-        // 5. Tổng hợp kết quả (Tối ưu cửa sổ ngữ cảnh)
+        // 5. Tổng hợp kết quả (Tăng độ rộng Context)
         $relevant_text = "";
         $char_count = 0;
-        $max_chars = 2500; // Giới hạn tổng ký tự gửi đi để không làm tràn Token của Llama
+        $max_chars = 5000; 
 
-        // Lấy Top 10 đoạn chất lượng nhất
-        foreach (array_slice($scored_chunks, 0, 10) as $item) {
+        // Lấy Top 12 đoạn để tăng khả năng xuất hiện đủ cả 2 môn
+        foreach (array_slice($scored_chunks, 0, 6) as $item) {
             $item_len = mb_strlen($item['text']);
-            // Chỉ thêm chunk mới nếu nó không làm tổng độ dài vượt quá giới hạn
             if ($char_count > 0 && ($char_count + $item_len) > $max_chars) {
                 break;
             }
@@ -106,32 +111,41 @@ class rag_engine {
             $char_count += $item_len;
         }
 
-        return $relevant_text ?: "Không tìm thấy nội dung phù hợp trong tài liệu bài giảng.";
+        return $relevant_text ?: "Không tìm thấy nội dung phù hợp trong tài liệu hệ thống.";
     }
 
     public function get_combined_chunks($current_course_id) {
         global $DB;
         $all_chunks = [];
 
-        // 1. Tìm các môn tiên quyết của môn này trong DB
         $prereq_ids = $DB->get_fieldset_select('block_ai_tutor_course_deps', 'prerequisite_id', 'course_id = ?', [$current_course_id]);
-        
-        // 2. Gom môn hiện tại và các môn tiên quyết vào 1 danh sách
-        $course_list = array_merge([$current_course_id], $prereq_ids);
+        $course_ids = array_merge([$current_course_id], $prereq_ids);
 
-        // 3. Đọc file JSON Cache của tất cả các môn này
-        foreach ($course_list as $id) {
-            $cache_file = __DIR__ . '/data/cache_course_' . $id . '.json';
+        foreach ($course_ids as $id) {
+            $cache_file = __DIR__ . '/../data/cache_course_' . $id . '.json';
+            
             if (file_exists($cache_file)) {
-                error_log("AI Tutor nạp kiến thức từ Course ID: " . $id);
+                $json_data = file_get_contents($cache_file);
+                $course_chunks = json_decode($json_data, true);
+                if (is_array($course_chunks)) {
+                    $all_chunks = array_merge($all_chunks, $course_chunks);
+                }
+            } else {
+                // NẾU KHÔNG CÓ CACHE (Do vừa bị xóa hoặc chưa có)
                 $course_obj = $DB->get_record('course', ['id' => $id]);
-                $parser = new \block_ai_tutor\document_parser();
-                $chunks = $parser->get_pdf_content_from_course($course_obj);
-            } else $chunks = json_decode(file_get_contents($cache_file), true);
-            if (!empty($course)) {
-                $all_chunks = array_merge($all_chunks, $course);
+                if ($course_obj) {
+                    // Gọi Parser để quét lại toàn bộ file hiện có trong khóa học
+                    $parser = new \block_ai_tutor\document_parser();
+                    $new_chunks = $parser->get_pdf_content_from_course($course_obj);
+                    
+                    if (!empty($new_chunks)) {
+                        $all_chunks = array_merge($all_chunks, $new_chunks);
+                        // Lưu lại cache mới để các lần hỏi sau chạy nhanh hơn
+                        file_put_contents($cache_file, json_encode($new_chunks, JSON_UNESCAPED_UNICODE));
+                    }
+                }
             }
-            return $all_chunks;
         }
+        return $all_chunks; 
     }
 }

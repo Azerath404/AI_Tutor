@@ -1,61 +1,71 @@
 <?php
-set_time_limit(0);
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+// 1. Cấu hình hệ thống
+set_time_limit(0); 
+ini_set('memory_limit', '512M');
+ini_set('zlib.output_compression', 0);
+ini_set('implicit_flush', 1);
+ignore_user_abort(true);
 
 define('AJAX_SCRIPT', true);
 require('../../config.php');
+require_login();
 
-// Tắt hiển thị lỗi HTML để không làm hỏng JSON
-error_reporting(E_ALL); // Nên log lỗi vào server log thay vì tắt hẳn để dễ debug
-ini_set('display_errors', 0); // Tắt hiển thị ra màn hình
-
-// Bắt buộc đăng nhập
-require_login(); 
-
-// Thiết lập Header trả về JSON
-header('Content-Type: application/json; charset=utf-8');
+// 2. Thiết lập Header Streaming
 header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache');
 header('Connection: keep-alive');
 header('X-Accel-Buffering: no');
-// Xóa bộ đệm đầu ra để đảm bảo không có HTML thừa (ví dụ warning của Moodle) lọt vào JSON
-while (ob_get_level()) {
-    ob_end_clean();
-}
+
+while (ob_get_level()) { ob_end_clean(); }
+
+global $USER, $DB;
 
 try {
-    // 1. INPUT: Nhận dữ liệu đầu vào & Validate (Controller logic)
+    // 3. Nhận dữ liệu
     $question = optional_param('question', '', PARAM_TEXT);
-    $courseId = optional_param('course_id', 1, PARAM_INT);
-    $userId = $USER->id;
+    $courseId = optional_param('course_id', optional_param('courseid', 0, PARAM_INT), PARAM_INT);
+    $userId = (int)$USER->id;
 
-    if (empty($question)) {
-        echo "data: " . json_encode(['error' => 'Câu hỏi trống']) . "\n\n";
+    if (empty($question) || $courseId === 0) {
+        echo "data: " . json_encode(['error' => 'Thiếu dữ cabbage: Question hoặc Course ID']) . "\n\n";
         exit;
     }
 
-    // 2. PROCESS: Gọi Service Layer để xử lý
-    // Khởi tạo Service (Dependency Injection could happen here in a framework like Laravel)
+    // --- BƯỚC DEBUG CHIẾN THUẬT ---
+    // Tạo thư mục data nếu chưa có
+    $debugPath = __DIR__ . '/data';
+    if (!is_dir($debugPath)) { @mkdir($debugPath, 0777, true); }
+    
+    // Ghi log NGAY LẬP TỨC để xác nhận request đã tới server
+    $logMsg = "[" . date('H:i:s') . "] Request: User $userId, Course $courseId, Question: $question\n";
+    file_put_contents($debugPath . '/request_log.txt', $logMsg, FILE_APPEND);
+
+    // 4. Xử lý Logic qua Service
     $aiService = new \block_ai_tutor\service();
     $repo = $aiService->get_repo();
     
-    // Bước 2.1: Lưu câu hỏi user vào db
+    // Lưu câu hỏi vào DB
     $repo->save_chat_log($userId, $courseId, 'user', $question);
     
-    // Bước 2.2: Gọi AI
+    // Bắt đầu xây dựng Prompt (Đoạn này dễ gây treo nếu RAG lỗi)
     $systemPrompt = $aiService->build_context_prompt($courseId, $USER, $question);
-    // THÊM DÒNG NÀY ĐỂ DEBUG: In toàn bộ Prompt (bao gồm cả nội dung PDF) vào file log của XAMPP
-    file_put_contents(__DIR__ . '/data/prompt_debug.txt', "=== LẦN CHAT LÚC " . date('H:i:s') . " ===\n" . $systemPrompt . "\n\n", FILE_APPEND);
+    
+    // Ghi file Prompt Debug ngay sau khi xây dựng xong để kiểm tra nội dung RAG bốc được gì
+    file_put_contents($debugPath . '/prompt_debug.txt', "=== PROMPT [" . date('H:i:s') . "] ===\n" . $systemPrompt . "\n\n", FILE_APPEND);
+    
+    // 5. Gọi AI (Ollama)
     $full_ai_answer = $aiService->call_llm($question, $systemPrompt, $userId, $courseId);
     
-    // 3. Sau khi AI gõ xong, lưu toàn bộ câu trả lời vào db
+    // 6. Lưu câu trả lời của AI
     if (!empty($full_ai_answer)) {
         $repo->save_chat_log($userId, $courseId, 'ai', $full_ai_answer);
     }
 
 } catch (\Throwable $e) {
-    // Nếu có lỗi, trả về JSON báo lỗi
+    // Ghi lỗi hệ thống vào log để không bị mất dấu
+    $errorMsg = "[" . date('H:i:s') . "] ERROR: " . $e->getMessage() . " tại " . $e->getFile() . " dòng " . $e->getLine() . "\n";
+    file_put_contents(__DIR__ . '/data/php_error.log', $errorMsg, FILE_APPEND);
+    
     echo "data: " . json_encode(['error' => $e->getMessage()]) . "\n\n";
+    flush();
 }

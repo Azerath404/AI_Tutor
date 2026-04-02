@@ -104,7 +104,7 @@ class service {
         $prompt .= "3. TRUNG THỰC: Tuyệt đối không tự bịa ra các hàm hoặc giải thích sai lệch logic bên ngoài tài liệu. Nếu không có thông tin, hãy nói 'Xin lỗi, tài liệu khóa học không đề cập đến vấn đề này'.\n";
         $prompt .= "4. ĐỊNH DẠNG CODE: Các đoạn mã lệnh (code) BẮT BUỘC phải được định dạng bằng Markdown (sử dụng 3 dấu nháy ngược).\n";
         $prompt .= "5. TRÍCH DẪN NGUỒN: Lấy tên file từ thẻ [Nguồn: ...]. DÒNG CUỐI CÙNG của câu trả lời BẮT BUỘC PHẢI LÀ: (Nguồn tham khảo: <tên file>).\n";
-        
+        $prompt .= "Trả lời thẳng vào vấn đề, không nhắc lại câu hỏi của sinh viên, không chào hỏi rườm rà.";
         $prompt .= "\nThông tin người hỏi: Sinh viên {$user->firstname} {$user->lastname}.\n";
         $prompt .= "Hãy trả lời câu hỏi sau của sinh viên:\n";
 

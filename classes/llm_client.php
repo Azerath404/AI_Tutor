@@ -19,7 +19,7 @@ class llm_client {
     /**
      * Gửi request tới Ollama API
      */
-    public function generate_content($prompt, $temperature = 0.7, $max_tokens = 1000) {
+    public function generate_content($prompt, $temperature = 0.3, $max_tokens = 1500) {
         // Tăng thời gian sống của PHP lên 10 phút (600 giây) để chờ AI đọc file và xử lý
         set_time_limit(600); 
 
@@ -35,7 +35,9 @@ class llm_client {
             "options" => [
                 "temperature" => $temperature,
                 "num_predict" => $max_tokens,
-                "num_ctx" => 8192
+                "num_ctx" => 8192,
+                "top_k" => 40,
+                "top_p" => 0.9
             ]
         ];
 
