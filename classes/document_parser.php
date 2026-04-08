@@ -6,49 +6,32 @@ require_once(__DIR__ . '/../vendor/autoload.php');
 
 class document_parser {
 
-    public function get_pdf_content_from_course($course) {
-        $cache_file = __DIR__ . '/../data/cache_course_' . $course->id . '.json';
-        $log_file = __DIR__ . '/../data/log_files.txt';
-
-        if (file_exists($cache_file)) {
-            // Nếu file cache đã tồn tại, đọc và trả về nội dung, không cần xử lý lại.
-            $data = json_decode(file_get_contents($cache_file), true);
-            if (!empty($data)) return $data;
-        }
+    /**
+     * Xử lý tất cả các file PDF trong một khóa học, thực hiện OCR nếu cần,
+     * chia thành các chunk và lưu vào database.
+     * Hàm này được thiết kế để chạy trong một tác vụ nền (background task).
+     * @param \stdClass $course Đối tượng khóa học của Moodle.
+     */
+    public function process_and_save_chunks_for_course($course) {
+        global $DB;
 
         $all_chunks = [];
-        $processed_hashes = []; 
+        $processed_hashes = [];
         $fs = get_file_storage();
         $modinfo = get_fast_modinfo($course);
         $parser = new \Smalot\PdfParser\Parser();
 
-        // Khởi tạo log mới (ghi đè 'w' thay vì 'a' để sạch log cũ)
-        file_put_contents($log_file, "--- BẮT ĐẦU QUÉT KHÓA HỌC: $course->id ---\n", FILE_APPEND);
-
         foreach ($modinfo->cms as $cm) {
-            // TẦNG LỌC 1: Chỉ xử lý nếu Resource này đang HIỂN THỊ (không bị hide, không bị xóa tạm)
-            if (!$cm->uservisible || $cm->deletioninprogress) {
-                continue;
-            }
-
-            if ($cm->modname !== 'resource' && $cm->modname !== 'folder') {
-                continue;
-            }
+            if (!$cm->uservisible || $cm->deletioninprogress) continue;
+            if ($cm->modname !== 'resource' && $cm->modname !== 'folder') continue;
 
             $context = \context_module::instance($cm->id);
             $component = 'mod_' . $cm->modname;
-            $files = $fs->get_area_files($context->id, $component, 'content', 0, 'id ASC', false);
+            $files = $fs->get_area_files($context->id, $component, 'content', 0, 'filename ASC', false);
             
             foreach ($files as $file) {
-                // TẦNG LỌC 3: Loại bỏ thư mục và file hệ thống
-                if ($file->is_directory() || $file->get_filename() === '.') {
-                    continue;
-                }
-
-                // TẦNG LỌC 4: Kiểm tra dung lượng (file xóa lỗi thường có size = 0 hoặc 1)
-                if ($file->get_filesize() <= 0) {
-                    continue;
-                }
+                if ($file->is_directory() || $file->get_filename() === '.') continue;
+                if ($file->get_filesize() <= 0) continue;
 
                 $content = $file->get_content();
                 if (empty($content)) continue;
@@ -58,13 +41,11 @@ class document_parser {
                 $processed_hashes[$hash] = true;
 
                 $filename = $file->get_filename();
-                file_put_contents($log_file, "-> Đang xử lý CHÍNH THỨC: $filename \n", FILE_APPEND);
 
                 try {
                     $pdf = $parser->parseContent($content);
                     $text = $pdf->getText();
                     
-                    // Logic OCR và Clean Text giữ nguyên như cũ...
                     $unicode_replacement_char = "\xEF\xBF\xBD"; 
                     $error_count = substr_count($text, $unicode_replacement_char);
                     $total_len = mb_strlen($text);
@@ -74,20 +55,41 @@ class document_parser {
                         $text = $this->run_ocr_python($file);
                     }
 
-                    // ... (Đoạn làm sạch văn bản và chunk_text giữ nguyên) ...
                     if (!empty(trim($text))) {
                         $this->chunk_text($text, $filename, $all_chunks);
                     }
                 } catch (\Throwable $e) {
-                    file_put_contents($log_file, "   [X] Lỗi: " . $e->getMessage() . "\n", FILE_APPEND);
+                    error_log("AI Tutor Error: " . $e->getMessage());
                 }
             }
         }
 
+        // Sau khi xử lý tất cả các file, lưu các chunk mới vào DB.
         if (!empty($all_chunks)) {
-            file_put_contents($cache_file, json_encode($all_chunks, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            $this->save_chunks_to_db($course->id, $all_chunks);
         }
-        return $all_chunks;
+    }
+
+    public function get_processed_files_list($courseid) {
+        global $DB;
+        $sql = "SELECT DISTINCT filename FROM {block_ai_tutor_chunks} WHERE courseid = ?";
+        $records = $DB->get_records_sql($sql, [$courseid]);
+        return array_keys($records);
+    }
+
+    private function save_chunks_to_db($courseid, $chunks) {
+        // Xóa tất cả các chunk cũ của khóa học này trước khi chèn chunk mới.
+        // Đây là một bước quan trọng để đảm bảo tính nhất quán của dữ liệu.
+        global $DB;
+        $DB->delete_records('block_ai_tutor_chunks', ['courseid' => $courseid]);
+        foreach ($chunks as $chunk) {
+            $record = new \stdClass();
+            $record->courseid = $courseid;
+            $record->filename = $chunk['file'];
+            $record->content  = $chunk['content'];
+            $record->hash     = md5($chunk['content']);
+            $DB->insert_record('block_ai_tutor_chunks', $record);
+        }
     }
 
     private function run_ocr_python($file) {
@@ -95,13 +97,10 @@ class document_parser {
             $temp_dir = make_temp_directory('block_ai_tutor');
             $temp_path = $temp_dir . '/' . $file->get_contenthash() . '.pdf';
             $file->copy_content_to($temp_path);
-
             $python_exe = 'python'; 
             $script_path = __DIR__ . '/../scripts/ocr_processor.py'; 
-            
             $command = escapeshellcmd("$python_exe $script_path " . escapeshellarg($temp_path));
             $output = shell_exec($command);
-
             @unlink($temp_path);
             return $output ?: '';
         } catch (\Exception $e) {
@@ -122,6 +121,25 @@ class document_parser {
                     'file' => $filename,
                     'content' => "[Nguồn: $filename]\n" . $sub_text
                 ];
+            }
+        }
+    }
+
+    /**
+     * Hàm này được gọi bởi ajax.php để đảm bảo rằng các chunk đã được tạo.
+     * Nếu chưa có, nó sẽ kích hoạt việc xử lý một cách đồng bộ.
+     * Đây là một cơ chế dự phòng (fallback) trong trường hợp cron chưa chạy.
+     * @param int $courseid
+     */
+    public function ensure_chunks_exist($courseid) {
+        global $DB;
+
+        $chunks_exist = $DB->record_exists('block_ai_tutor_chunks', ['courseid' => $courseid]);
+
+        if (!$chunks_exist) {
+            $course = get_course($courseid);
+            if ($course) {
+                $this->process_and_save_chunks_for_course($course);
             }
         }
     }

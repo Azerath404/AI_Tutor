@@ -17,7 +17,6 @@ class block_ai_tutor extends block_base {
 
         $this->content = new stdClass;
         
-        // Khởi tạo service để thực hiện tự động dọn dẹp log cũ
         try {
             $service = new \block_ai_tutor\service();
             $service->get_repo()->auto_purge_old_logs(7); 
@@ -32,20 +31,14 @@ class block_ai_tutor extends block_base {
         $courseId = $this->page->course->id;
         $context = context_course::instance($courseId);
 
-        // --- LẤY LỊCH SỬ CHAT ---
         $history_records = [];
         try {
-            if (!isset($service)) {
-                $repo = new \block_ai_tutor\repository();
-            } else {
-                $repo = $service->get_repo();
-            }
+            $repo = isset($service) ? $service->get_repo() : new \block_ai_tutor\repository();
             $history_records = $repo->get_chat_history($USER->id, $courseId, 20);
         } catch (\Exception $e) { }
         
         $historyJson = json_encode($history_records, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         
-        // --- XỬ LÝ NÚT THIẾT LẬP ---
         $adminHtml = '';
         if (has_capability('moodle/course:update', $context)) {
             $manageUrl = new moodle_url('/blocks/ai_tutor/manage_links.php', array('courseid' => $courseId));
@@ -64,12 +57,12 @@ class block_ai_tutor extends block_base {
 
             <style>
                 #ai-chat-history {
-                    height: 350px; 
+                    height: 400px; 
                     overflow-y: auto; 
                     border: 1px solid #dee2e6; 
-                    padding: 15px; 
+                    padding: 12px; 
                     margin-bottom: 10px; 
-                    background: #f8f9fa; 
+                    background: #ffffff; 
                     border-radius: 8px;
                     scroll-behavior: smooth;
                     display: flex;
@@ -82,141 +75,137 @@ class block_ai_tutor extends block_base {
                     margin-bottom: 8px;
                 }
                 #ai-btn-clear {
-                    background: none;
-                    border: none;
-                    color: #dc3545;
-                    font-size: 0.8em;
-                    cursor: pointer;
-                    text-decoration: none;
-                    padding: 0;
+                    background: none; border: none; color: #dc3545; font-size: 0.8em; cursor: pointer;
                 }
-                #ai-btn-clear:hover { text-decoration: underline; }
                 .chat-msg {
-                    margin-bottom: 15px;
-                    padding: 12px 16px;
+                    margin-bottom: 12px;
+                    padding: 10px 14px;
                     border-radius: 8px;
-                    max-width: 90%;
+                    font-size: 13.5px;
+                    line-height: 1.6;
                     word-wrap: break-word;
-                    line-height: 1.5;
-                    font-size: 14px;
                 }
                 .msg-user {
                     background: #007bff;
                     color: white;
                     align-self: flex-end;
+                    max-width: 85%;
                     border-bottom-right-radius: 2px;
                 }
+                /* AI Message - Mở rộng full chiều rộng để tránh bị bó hẹp */
                 .msg-ai {
-                    background: white;
-                    color: #333;
+                    background: #f8f9fa;
+                    color: #212529;
                     align-self: flex-start;
                     border: 1px solid #e9ecef;
                     border-bottom-left-radius: 2px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                     width: 100%;
+                    box-sizing: border-box;
+                }
+                /* Định dạng Markdown nội dung AI */
+                .ai-reply-content ul, .ai-reply-content ol {
+                    padding-left: 1.5rem;
+                    margin-bottom: 0.5rem;
+                }
+                .ai-reply-content p { margin-bottom: 0.5rem; }
+                .ai-reply-content code {
+                    background: #050505; padding: 2px 4px; border-radius: 4px; font-family: monospace;
                 }
                 .msg-ai pre {
                     background-color: #0d1117 !important;
-                    color: #c9d1d9;
-                    padding: 12px;
+                    color: #050505;
+                    padding: 10px;
                     border-radius: 6px;
                     overflow-x: auto;
-                    margin: 10px 0;
+                    margin: 8px 0;
+                }
+                .ai-reply-content pre {
+                    background: #1e1e1e !important;
+                    color: #050505 !important;
+                    padding: 12px !important;
+                    border-radius: 6px;
+                    white-space: pre !important; /* Quan trọng để giữ định dạng code */
+                    overflow-x: auto;
+                    width: 100%;
+                    display: block;
                 }
             </style>
 
-            <div style="padding:5px;">
+            <div style="padding:2px;">
                 <div class="chat-header">
-                    <span style="font-weight: bold; font-size: 0.9em; color: #444;">Trợ lý AI</span>
-                    <button id="ai-btn-clear" title="Xóa toàn bộ hội thoại môn này">🗑️ Xóa lịch sử</button>
+                    <span style="font-weight: bold; font-size: 0.85em; color: #555;">🤖 AI Tutor (Nha Trang University)</span>
+                    <button id="ai-btn-clear">🗑️ Xóa lịch sử</button>
                 </div>
                 
                 <div id="ai-chat-history">
-                    <div style="color: #666; font-style: italic; font-size: 0.9em; text-align: center; width: 100%;">Bắt đầu trò chuyện với AI Tutor...</div>
+                    <div style="color: #999; font-style: italic; font-size: 0.85em; text-align: center; width: 100%; margin: auto;">Bắt đầu đặt câu hỏi về bài giảng...</div>
                 </div>
                 
-                <textarea id="ai-question" class="form-control" rows="2" placeholder="Hỏi gì đi (Nhấn Enter để gửi)..."></textarea>
-                <button id="ai-btn-send" class="btn btn-primary mt-2" style="width:100%">🚀 Gửi câu hỏi</button>
+                <textarea id="ai-question" class="form-control" rows="2" placeholder="Nhập câu hỏi..."></textarea>
+                <button id="ai-btn-send" class="btn btn-primary mt-2" style="width:100%; font-weight: bold;">🚀 Gửi câu hỏi</button>
                 
                 {$adminHtml}
             </div>
 
             <script>
             (function() {
-                // Sử dụng phạm vi cục bộ để tránh lỗi SyntaxError: Identifier already declared
                 marked.use({ breaks: true, gfm: true });
                 
+                const historyBox = document.getElementById("ai-chat-history");
                 const currentHistory = {$historyJson};
                 const courseId = "{$courseId}";
                 const ajaxUrl = "{$ajaxUrlStr}";
                 const deleteUrl = "{$deleteUrlStr}";
 
+                function renderContent(sender, text) {
+                    if (sender === 'user') {
+                        return '<strong>Bạn:</strong><br>' + document.createTextNode(text).wholeText;
+                    }
+                    return '<strong>AI:</strong><div class="ai-reply-content">' + marked.parse(text || '') + '</div>';
+                }
+
                 function loadInitialHistory() {
-                    const historyBox = document.getElementById("ai-chat-history");
                     if (currentHistory && currentHistory.length > 0) {
                         historyBox.innerHTML = ''; 
                         currentHistory.forEach(log => {
                             const msgDiv = document.createElement("div");
-                            const sender = log.role;
-                            const text = log.message;
-
-                            msgDiv.className = "chat-msg " + (sender === "user" ? "msg-user" : "msg-ai");
-                            
-                            let content = '';
-                            if (sender === 'user') {
-                                const temp = document.createElement('div');
-                                temp.textContent = text;
-                                content = temp.innerHTML;
-                            } else {
-                                content = marked.parse(text || '');
-                            }
-
-                            const senderName = sender === "user" ? "Bạn" : "AI";
-                            msgDiv.innerHTML = `<strong>\${senderName}:</strong><br>\${content}`;
+                            msgDiv.className = "chat-msg " + (log.role === "user" ? "msg-user" : "msg-ai");
+                            msgDiv.innerHTML = renderContent(log.role, log.message);
                             historyBox.appendChild(msgDiv);
                         });
-
-                        historyBox.querySelectorAll("pre code").forEach((block) => {
-                            hljs.highlightElement(block);
-                        });
+                        historyBox.querySelectorAll("pre code").forEach(el => hljs.highlightElement(el));
                         historyBox.scrollTop = historyBox.scrollHeight;
                     }
                 }
 
-                function appendMessage(sender, text) {
-                    const historyBox = document.getElementById("ai-chat-history");
-                    const msgDiv = document.createElement("div");
-                    msgDiv.className = "chat-msg " + (sender === "user" ? "msg-user" : "msg-ai");
-                    msgDiv.innerHTML = "<strong>" + (sender === "user" ? "Bạn" : "AI") + ":</strong><br>";
-                    msgDiv.appendChild(document.createTextNode(text));
-                    historyBox.appendChild(msgDiv);
-                    historyBox.scrollTop = historyBox.scrollHeight;
-                }
-
                 function sendAiQuestion() {
                     const questionInput = document.getElementById("ai-question");
-                    const question = questionInput.value;
-                    if (!question.trim()) { return; }
+                    const question = questionInput.value.trim();
+                    if (!question) return;
 
-                    appendMessage("user", question);
+                    // Hiển thị tin nhắn User
+                    const userDiv = document.createElement("div");
+                    userDiv.className = "chat-msg msg-user";
+                    userDiv.innerHTML = renderContent('user', question);
+                    historyBox.appendChild(userDiv);
                     questionInput.value = ""; 
-                    
-                    const historyBox = document.getElementById("ai-chat-history");
-                    const msgDiv = document.createElement("div");
-                    msgDiv.className = "chat-msg msg-ai";
-                    msgDiv.innerHTML = "<strong>AI:</strong><div class=\"ai-reply-content\" style=\"margin-top:5px;\">⏳ Đang suy nghĩ...</div>";
-                    historyBox.appendChild(msgDiv);
+
+                    // Tạo khung tin nhắn AI đang chờ
+                    const aiDiv = document.createElement("div");
+                    aiDiv.className = "chat-msg msg-ai";
+                    aiDiv.innerHTML = '<strong>AI:</strong><div class="ai-reply-content">⏳ Đang xử lý tài liệu...</div>';
+                    historyBox.appendChild(aiDiv);
                     historyBox.scrollTop = historyBox.scrollHeight;
 
-                    const replySpan = msgDiv.querySelector(".ai-reply-content");
+                    const replyContent = aiDiv.querySelector(".ai-reply-content");
                     let fullText = ""; 
 
                     const fetchUrl = ajaxUrl + "?question=" + encodeURIComponent(question) + "&course_id=" + courseId;
-                    fetch(fetchUrl)
-                    .then(async response => {
+                    
+                    fetch(fetchUrl).then(async response => {
                         const reader = response.body.getReader();
                         const decoder = new TextDecoder("utf-8");
-                        replySpan.innerHTML = ""; 
+                        replyContent.innerHTML = ""; 
 
                         while (true) {
                             const { done, value } = await reader.read();
@@ -227,54 +216,46 @@ class block_ai_tutor extends block_base {
                             
                             for (let line of lines) {
                                 if (line.startsWith("data: ")) {
-                                    const dataStr = line.substring(6);
-                                    if (dataStr === "[DONE]") break;
+                                    const dataStr = line.substring(6).trim();
+                                    if (dataStr === "[DONE]") continue;
                                     
                                     try {
                                         const dataObj = JSON.parse(dataStr);
-                                        if(dataObj.error) {
-                                            replySpan.innerHTML += "<br><span style='color:red'>❌ Lỗi: " + dataObj.error + "</span>";
-                                            break;
+                                        if(dataObj.text) {
+                                            fullText += dataObj.text;
+                                            replyContent.innerHTML = marked.parse(fullText);
+                                            // Highlight code trong lúc stream
+                                            replyContent.querySelectorAll("pre code").forEach(el => {
+                                                if (!el.dataset.highlighted) {
+                                                    hljs.highlightElement(el);
+                                                    el.dataset.highlighted = "true";
+                                                }
+                                            });
+                                            historyBox.scrollTop = historyBox.scrollHeight;
                                         }
-                                        fullText += dataObj.text;
-                                        replySpan.innerHTML = marked.parse(fullText);
-                                        replySpan.querySelectorAll("pre code").forEach((block) => {
-                                            hljs.highlightElement(block);
-                                        });
-                                        historyBox.scrollTop = historyBox.scrollHeight; 
                                     } catch (e) { }
                                 }
                             }
                         }
-                    })
-                    .catch(error => {
-                        replySpan.innerHTML = "❌ Lỗi kết nối máy chủ AI.";
+                    }).catch(err => {
+                        replyContent.innerHTML = "❌ Lỗi kết nối máy chủ AI.";
                     });
                 }
 
-                // Gán sự kiện
                 document.getElementById("ai-btn-send").onclick = sendAiQuestion;
-                
-                document.getElementById("ai-question").onkeypress = function(event) {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault(); 
-                        sendAiQuestion();
-                    }
+                document.getElementById("ai-question").onkeypress = e => {
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAiQuestion(); }
                 };
 
-                document.getElementById("ai-btn-clear").onclick = function() {
-                    if (confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử trò chuyện trong môn này không?")) {
+                document.getElementById("ai-btn-clear").onclick = () => {
+                    if (confirm("Xóa lịch sử trò chuyện môn này?")) {
                         fetch(deleteUrl + "?course_id=" + courseId)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                document.getElementById("ai-chat-history").innerHTML = '<div style="color: #666; font-style: italic; font-size: 0.9em; text-align: center; width: 100%;">Đã xóa lịch sử. Bắt đầu phiên mới...</div>';
-                            }
+                        .then(r => r.json()).then(d => {
+                            if (d.success) historyBox.innerHTML = '<div style="text-align:center; color:#999;">Đã xóa lịch sử.</div>';
                         });
                     }
                 };
 
-                // Khởi tạo
                 loadInitialHistory();
             })();
             </script>

@@ -1,5 +1,4 @@
 <?php
-// 1. Nhúng cấu hình Moodle - Quan trọng nhất để hết lỗi đỏ
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->libdir.'/adminlib.php');
 
