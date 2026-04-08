@@ -1,8 +1,8 @@
 <?php
 define('CLI_SCRIPT', true); // Khai báo đây là script chạy bằng dòng lệnh
 
-require(__DIR__ . '/../../../config.php'); // Nhúng cấu hình Moodle
-require_once($CFG->libdir . '/clilib.php'); // Thư viện hỗ trợ CLI
+require(__DIR__ . '/../../../config.php');
+require_once($CFG->libdir . '/clilib.php');
 
 global $DB;
 
@@ -30,8 +30,8 @@ foreach ($courses as $course) {
         $block->blockname       = 'ai_tutor';
         $block->parentcontextid = $context->id;
         $block->showinsubcontexts = 0;
-        $block->pagetypepattern   = 'course-view-*'; // Hiển thị trong tất cả giao diện khóa học
-        $block->defaultregion     = 'side-pre';     // Vị trí mặc định (bên trái/phải tùy theme)
+        $block->pagetypepattern   = 'course-view-*';
+        $block->defaultregion     = 'side-pre';
         $block->defaultweight     = 0;
         $block->timecreated       = time();
         $block->timemodified      = time();

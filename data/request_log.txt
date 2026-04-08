@@ -1,8 +1,0 @@
-[10:06:07] Request: User 2, Course 4, Question: Cho tôi biết khái niệm về Đối tượng trong file ChuDe1 là gì?
-[10:07:59] Request: User 2, Course 4, Question: giữa 2 bộ môn: Kỹ thuật lập trình và Lập trình hướng đối tượng, 2 môn này có liên hệ gì với nhau?
-[10:12:23] Request: User 2, Course 4, Question: giữa 2 bộ môn: Kỹ thuật lập trình và Lập trình hướng đối tượng, 2 môn này có liên hệ gì với nhau?
-[10:19:12] Request: User 2, Course 4, Question: giữa 2 bộ môn: Kỹ thuật lập trình và Lập trình hướng đối tượng, 2 môn này có liên hệ gì với nhau?
-[10:26:28] Request: User 2, Course 4, Question: Trong môn Kỹ thuật lập trình mình đã học về 'Kiểu dữ liệu cấu trúc' (struct). Vậy khi sang môn Lập trình hướng đối tượng, khái niệm 'Lớp' (Class) có điểm gì giống và khác so với struct đó? Hãy trích dẫn từ cả hai tài liệu.
-[10:38:30] Request: User 2, Course 4, Question: So sánh cách tổ chức mã nguồn giữa Kỹ thuật lập trình và Lập trình hướng đối tượng dựa trên tài liệu bài giảng.
-[05:02:04] Request: User 2, Course 3, Question: Con trỏ hàm là gì?
-[05:09:24] Request: User 2, Course 3, Question: Trong thư mục tài liệu bổ trợ có những nội dung gì?

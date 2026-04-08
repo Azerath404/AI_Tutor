@@ -33,56 +33,34 @@ class observer {
     }
 
     public static function handle_content_change(\core\event\base $event) {
-        global $CFG, $DB;
+    global $DB;
 
-        $courseid = null;
+    // Cách 1: Thử lấy trực tiếp từ sự kiện
+    $courseid = $event->courseid;
 
-        // 1. Tìm Course ID bằng mọi cách có thể
-        if (isset($event->courseid) && $event->courseid > 0) {
-            $courseid = $event->courseid;
-        } else {
-            // Nếu xóa module ngoài trang chính, Moodle thường để thông tin trong context hoặc snapshot
-            $filedata = $event->get_record_snapshot('files', $event->objectid);
-            if ($filedata) {
-                $context = \context::instance_by_id($filedata->contextid);
-                if ($context->contextlevel == CONTEXT_COURSE) {
-                    $courseid = $context->instanceid;
-                } else if ($context->contextlevel == CONTEXT_MODULE) {
-                    $courseid = $DB->get_field('course_modules', 'course', ['id' => $context->instanceid]);
-                }
-            }
-        }
-
-        // Trường hợp đặc biệt: Xóa Course Module (Cái Long đang làm)
-        if (!$courseid && strpos($event->eventname, 'course_module_deleted') !== false) {
-            $courseid = $event->get_data()['courseid'] ?? null;
-        }
-
-        if ($courseid) {
-            $cache_file = $CFG->dirroot . '/blocks/ai_tutor/data/cache_course_' . $courseid . '.json';
-
-            // 2. THỰC HIỆN XÓA CACHE (Dù là Thêm hay Xóa file trên Moodle)
-            if (file_exists($cache_file)) {
-                // Ép xóa file bằng cách xóa cache trong bộ nhớ PHP trước
-                clearstatcache(); 
-                if (@unlink($cache_file)) {
-                    error_log("AI Tutor: Đã xóa thành công cache Course $courseid");
-                } else {
-                    error_log("AI Tutor: Lỗi quyền xóa file tại $cache_file");
-                }
-            }
-
-            // 3. CHỈ TẠO LẠI NẾU KHÔNG PHẢI SỰ KIỆN XÓA
-            // Kiểm tra cả 'deleted' trong tên event
-            if (strpos($event->eventname, 'deleted') === false) {
-                $course_obj = $DB->get_record('course', array('id' => $courseid));
-                $parser = new \block_ai_tutor\document_parser();
-                $chunks = $parser->get_pdf_content_from_course($course_obj);
-                
-                if (!empty($chunks)) {
-                    file_put_contents($cache_file, json_encode($chunks, JSON_UNESCAPED_UNICODE));
-                }
+    // Cách 2: Nếu là sự kiện File, lấy từ context
+    if (!$courseid) {
+        $eventdata = $event->get_data();
+        if (isset($eventdata['contextid'])) {
+            $context = \context::instance_by_id($eventdata['contextid']);
+            $coursecontext = $context->get_course_context(false);
+            if ($coursecontext) {
+                $courseid = $coursecontext->instanceid;
             }
         }
     }
+
+    if ($courseid) {
+        // Bước 1: Xóa dữ liệu cũ của môn này trong DB để tránh chồng chéo
+        $DB->delete_records('block_ai_tutor_chunks', ['courseid' => $courseid]);
+
+        // Bước 2: Tạo Adhoc Task
+        $task = new \block_ai_tutor\task\process_course_documents();
+        $task->set_custom_data(['courseid' => $courseid]);
+        
+        \core\task\manager::queue_adhoc_task($task);
+        
+        error_log("AI Tutor: Đã tạo Adhoc Task cho Course ID: " . $courseid);
+    }
+}
 }

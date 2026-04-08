@@ -34,5 +34,22 @@
         <INDEX NAME="course_idx" UNIQUE="false" FIELDS="course_id"/>
       </INDEXES>
     </TABLE>
+
+    <TABLE NAME="block_ai_tutor_chunks" COMMENT="Luu tru cac phan doan van ban tai lieu de truy van RAG nhanh">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="ID cua khoa hoc"/>
+        <FIELD NAME="filename" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Ten file nguon"/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Noi dung doan van ban da chia nhỏ"/>
+        <FIELD NAME="hash" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="Hash de kiem tra thay doi tai lieu"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="course_idx" UNIQUE="false" FIELDS="courseid" COMMENT="Index de truy van nhanh theo khoa hoc"/>
+        <INDEX NAME="content_fulltext" UNIQUE="false" FIELDS="content" TYPE="fulltext" COMMENT="Chi muc Full-text de toi uu cau lenh MATCH AGAINST"/>
+      </INDEXES>
+    </TABLE>
   </TABLES>
 </XMLDB>
