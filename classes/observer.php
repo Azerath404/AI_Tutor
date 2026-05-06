@@ -33,34 +33,40 @@ class observer {
     }
 
     public static function handle_content_change(\core\event\base $event) {
-    global $DB;
+        global $DB;
 
-    // Cách 1: Thử lấy trực tiếp từ sự kiện
-    $courseid = $event->courseid;
+        // Cách 1: Thử lấy trực tiếp từ sự kiện
+        $courseid = $event->courseid;
 
-    // Cách 2: Nếu là sự kiện File, lấy từ context
-    if (!$courseid) {
-        $eventdata = $event->get_data();
-        if (isset($eventdata['contextid'])) {
-            $context = \context::instance_by_id($eventdata['contextid']);
-            $coursecontext = $context->get_course_context(false);
-            if ($coursecontext) {
-                $courseid = $coursecontext->instanceid;
+        // Cách 2: Nếu là sự kiện File, lấy từ context
+        if (!$courseid) {
+            $eventdata = $event->get_data();
+            if (isset($eventdata['contextid'])) {
+                $context = \context::instance_by_id($eventdata['contextid']);
+                $coursecontext = $context->get_course_context(false);
+                if ($coursecontext) {
+                    $courseid = $coursecontext->instanceid;
+                }
             }
         }
-    }
 
-    if ($courseid) {
-        // Bước 1: Xóa dữ liệu cũ của môn này trong DB để tránh chồng chéo
-        $DB->delete_records('block_ai_tutor_chunks', ['courseid' => $courseid]);
+        if ($courseid) {
+            // KHÔNG xóa chunks ở đây — để tránh race condition:
+            // Nếu xóa ngay, sinh viên hỏi trong lúc cron chưa chạy → nhận thông báo "đang lập chỉ mục".
+            // Task sẽ tự xóa chunks cũ và thay bằng chunks mới bên trong process_and_save_chunks_for_course().
 
-        // Bước 2: Tạo Adhoc Task
-        $task = new \block_ai_tutor\task\process_course_documents();
-        $task->set_custom_data(['courseid' => $courseid]);
-        
-        \core\task\manager::queue_adhoc_task($task);
-        
-        error_log("AI Tutor: Đã tạo Adhoc Task cho Course ID: " . $courseid);
+            // Xóa RAG cache ngay lập tức khi tài liệu thay đổi
+            // (tránh sinh viên nhận context cũ trong 10 phút TTL)
+            $cache = \cache::make('block_ai_tutor', 'rag_context');
+            $cache->purge();
+
+            // Queue task với deduplicate=true: tránh chạy nhiều task song song
+            // khi giảng viên upload nhiều file liên tiếp.
+            $task = new \block_ai_tutor\task\process_course_documents();
+            $task->set_custom_data(['courseid' => $courseid]);
+            \core\task\manager::queue_adhoc_task($task, true);
+
+            error_log("AI Tutor: Đã queue re-index task cho Course ID: " . $courseid);
+        }
     }
-}
 }

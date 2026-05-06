@@ -1,0 +1,53 @@
+﻿[2026-04-22 09:36:01] === Ollama Warm-up START ===
+[2026-04-22 09:36:01] Cho Ollama service...
+[2026-04-22 09:36:03] Ollama san sang (sau 0 giay).
+[2026-04-22 09:36:03] Dang load model llama3.2 vao RAM (co the mat 30-120 giay)...
+[2026-04-22 09:36:15] OK: Model llama3.2 load thanh cong trong 11.6s. Keep-alive: 120 phut.
+[2026-04-22 09:36:15] === Ollama Warm-up END ===
+[2026-04-22 09:38:33] === Ollama Warm-up START ===
+[2026-04-22 09:38:33] Cho Ollama service...
+[2026-04-22 09:38:35] Ollama san sang (sau 0 giay).
+[2026-04-22 09:38:35] Dang load model llama3.2 vao RAM (co the mat 30-120 giay)...
+[2026-04-22 09:38:40] OK: Model llama3.2 load thanh cong trong 4.3s. Keep-alive: 120 phut.
+[2026-04-22 09:38:40] === Ollama Warm-up END ===
+[2026-04-22 09:41:36] === Ollama Warm-up START ===
+[2026-04-22 09:41:36] Cho Ollama service...
+[2026-04-22 09:41:39] Ollama san sang (sau 0 giay).
+[2026-04-22 09:41:39] Dang load model llama3.2 vao RAM (co the mat 30-120 giay)...
+[2026-04-22 09:41:53] OK: Model llama3.2 load thanh cong trong 14s. Keep-alive: 120 phut.
+[2026-04-22 09:41:53] === Ollama Warm-up END ===
+[2026-04-22 18:48:55] === Ollama Warm-up START ===
+[2026-04-22 18:48:55] Cho Ollama service...
+[2026-04-22 18:50:56] LOI: Ollama khong phan hoi sau 60 giay. Thoat.
+[2026-04-25 20:51:33] === Ollama Warm-up START ===
+[2026-04-25 20:51:33] Cho Ollama service...
+[2026-04-25 20:53:36] LOI: Ollama khong phan hoi sau 60 giay. Thoat.
+[2026-04-29 11:30:26] === Ollama Warm-up START ===
+[2026-04-29 11:30:27] Cho Ollama service...
+[2026-04-29 11:32:28] LOI: Ollama khong phan hoi sau 60 giay. Thoat.
+[2026-05-04 08:24:39] === Ollama Warm-up START ===
+[2026-05-04 08:24:39] Cho Ollama service...
+[2026-05-04 08:26:40] LOI: Ollama khong phan hoi sau 60 giay. Thoat.
+[2026-05-05 16:16:44] === Ollama Warm-up START ===
+[2026-05-05 16:16:44] Cho Ollama service...
+[2026-05-05 16:18:45] LOI: Ollama khong phan hoi sau 60 giay. Thoat.
+[2026-05-05 16:24:51] === Ollama Warm-up START ===
+[2026-05-05 16:24:51] Cho Ollama service...
+[2026-05-05 16:26:52] LOI: Ollama khong phan hoi sau 60 giay. Thoat.
+[2026-05-06 07:57:43] === Ollama Warm-up START ===
+[2026-05-06 07:57:43] Cho Ollama service...
+[2026-05-06 07:59:46] LOI: Ollama khong phan hoi sau 60 giay. Thoat.
+[2026-05-06 14:00:58][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-06 14:00:58][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: True
+[2026-05-06 14:00:58][INFO] Dang cho Ollama service san sang...
+[2026-05-06 14:01:00][INFO] Ollama san sang (sau 0 giay).
+[2026-05-06 16:01:03][INFO] Watch ping: Kiem tra model 'llama3.2'...
+[2026-05-06 16:01:05][INFO] Model 'llama3.2' da co trong RAM. Bo qua. (watch-keepalive)
+[2026-05-06 16:03:18][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-06 16:03:18][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: False
+[2026-05-06 16:03:18][INFO] Dang cho Ollama service san sang...
+[2026-05-06 16:04:06][INFO] Ollama san sang (sau 24 giay).
+[2026-05-06 16:04:06][INFO] Dang load model 'llama3.2' vao RAM... (startup)
+[2026-05-06 16:04:06][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
+[2026-05-06 16:04:14][INFO] OK: Model 'llama3.2' loaded thanh cong trong 7.1s. Keep-alive=120m.
+[2026-05-06 16:04:14][INFO] === AI Tutor Ollama Warm-up END ===
