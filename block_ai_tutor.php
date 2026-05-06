@@ -17,9 +17,26 @@ class block_ai_tutor extends block_base {
 
         $this->content = new stdClass;
         
+        $courseId = $this->page->course->id;
+
         try {
             $service = new \block_ai_tutor\service();
-            $service->get_repo()->auto_purge_old_logs(7); 
+
+            // auto_purge_old_logs chỉ chạy tối đa 1 lần/ngày thông qua Moodle cache.
+            // Trước đây chạy mọi page load → gây DELETE query không cần thiết.
+            $purge_cache = \cache::make('block_ai_tutor', 'purge_flag');
+            if ($purge_cache->get('last_purge_day') !== date('Y-m-d')) {
+                $service->get_repo()->auto_purge_old_logs(7);
+                $purge_cache->set('last_purge_day', date('Y-m-d'));
+            }
+
+            global $DB;
+            $chunks_exist = $DB->record_exists('block_ai_tutor_chunks', ['courseid' => $courseId]);
+            if (!$chunks_exist) {
+                $task = new \block_ai_tutor\task\process_course_documents();
+                $task->set_custom_data(['courseid' => $courseId]);
+                \core\task\manager::queue_adhoc_task($task, true);
+            }
         } catch (\Exception $e) { }
 
         $ajaxUrl = new moodle_url('/blocks/ai_tutor/ajax.php');
@@ -28,7 +45,12 @@ class block_ai_tutor extends block_base {
         $deleteUrl = new moodle_url('/blocks/ai_tutor/delete_history.php');
         $deleteUrlStr = $deleteUrl->out(false);
 
-        $courseId = $this->page->course->id;
+        $checkReadyUrl = new moodle_url('/blocks/ai_tutor/classes/ajax/check_ready.php');
+        $checkReadyUrlStr = $checkReadyUrl->out(false);
+
+        $warmupUrl = new moodle_url('/blocks/ai_tutor/classes/ajax/warmup_model.php');
+        $warmupUrlStr = $warmupUrl->out(false);
+
         $context = context_course::instance($courseId);
 
         $history_records = [];
@@ -136,7 +158,10 @@ class block_ai_tutor extends block_base {
                     <span style="font-weight: bold; font-size: 0.85em; color: #555;">🤖 AI Tutor (Nha Trang University)</span>
                     <button id="ai-btn-clear">🗑️ Xóa lịch sử</button>
                 </div>
-                
+                <div style="font-size:0.78em; margin-bottom:6px; text-align:right;">
+                    <span id="ai-model-status" style="color:#6c757d;">⚪ Đang kiểm tra...</span>
+                </div>
+
                 <div id="ai-chat-history">
                     <div style="color: #999; font-style: italic; font-size: 0.85em; text-align: center; width: 100%; margin: auto;">Bắt đầu đặt câu hỏi về bài giảng...</div>
                 </div>
@@ -156,6 +181,116 @@ class block_ai_tutor extends block_base {
                 const courseId = "{$courseId}";
                 const ajaxUrl = "{$ajaxUrlStr}";
                 const deleteUrl = "{$deleteUrlStr}";
+                const checkReadyUrl = "{$checkReadyUrlStr}";
+                const warmupUrl = "{$warmupUrlStr}";
+
+
+
+                let checkAttempts = 0;
+                const maxCheckAttempts = 6; // Tối đa 6 lần × 5s = 30 giây
+
+                // ── WARMUP: Gọi ngay khi trang load ─────────────────────────
+                const modelStatusEl = document.getElementById('ai-model-status');
+                let warmupTimer = null;
+                let warmupSeconds = 0;
+
+                function updateModelStatus(status, extraMsg) {
+                    if (!modelStatusEl) return;
+                    const map = {
+                        'already_loaded': ['🟢 Model sẵn sàng',   '#28a745'],
+                        'warming_up':     ['🟡 Đang tải model...', '#e6a817'],
+                        'queued':         ['🟡 Đang tải model...', '#e6a817'],
+                        'error':          ['🔴 Không kết nối AI',  '#dc3545'],
+                    };
+                    const [label, color] = map[status] || ['⚪ Đang kiểm tra...', '#6c757d'];
+                    modelStatusEl.textContent = extraMsg ? label + ' ' + extraMsg : label;
+                    modelStatusEl.style.color = color;
+                }
+
+                // Poll /api/ps qua warmup endpoint để biết khi nào model thực sự ready.
+                // Lý do dùng warmup endpoint thay vì gọi /api/ps trực tiếp:
+                //   → /api/ps là Ollama local, không thể gọi từ browser (CORS).
+                //   → warmup_model.php đã có logic kiểm tra /api/ps phía server.
+                function pollWarmupStatus() {
+                    if (warmupTimer) clearInterval(warmupTimer);
+                    warmupSeconds = 0;
+
+                    warmupTimer = setInterval(function() {
+                        warmupSeconds += 10;
+                        // Hiển thị thời gian đã chờ để người dùng biết đang diễn ra
+                        const waited = warmupSeconds < 60
+                            ? warmupSeconds + 's'
+                            : Math.floor(warmupSeconds / 60) + 'm' + (warmupSeconds % 60) + 's';
+                        updateModelStatus('warming_up', '(' + waited + ')');
+
+                        // Poll lại server để kiểm tra model đã load xong chưa
+                        fetch(warmupUrl)
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.status === 'already_loaded') {
+                                    clearInterval(warmupTimer);
+                                    updateModelStatus('already_loaded');
+                                }
+                                // 'warming_up': tiếp tục poll
+                            })
+                            .catch(() => { /* Giữ nguyên status, thử lại lần sau */ });
+
+                        // Tối đa 5 phút (300s) thì dừng poll, để user tự thử
+                        if (warmupSeconds >= 300) {
+                            clearInterval(warmupTimer);
+                            updateModelStatus('warming_up', '(thử gửi câu hỏi)');
+                        }
+                    }, 20000); // Poll mỗi 20s (warmup_model.php blocking tối đa 15s, cần buffer)
+                }
+
+                // Gọi warmup ngay khi trang load.
+                // warmup_model.php v4 là blocking call (~5-15s):
+                //   - Nếu model đã trong RAM: trả về ngay sau ~200ms
+                //   - Nếu chưa: chờ Ollama load xong (~5.5s) rồi mới trả về already_loaded
+                // → fetch này có thể mất 5-15s, sau đó status sẽ là already_loaded.
+                updateModelStatus('warming_up');
+                fetch(warmupUrl)
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.status === 'already_loaded') {
+                            updateModelStatus('already_loaded');
+                        } else {
+                            // Vẫn chưa load xong (>15s) — poll tiếp
+                            pollWarmupStatus();
+                        }
+                    })
+                    .catch(() => { updateModelStatus('error'); });
+                // Nút Gửi LUÔN enabled — người dùng có thể gửi bất kỳ lúc nào.
+                // ────────────────────────────────────────────────────────────
+
+
+
+                async function checkIndexStatus() {
+                    try {
+                        const res = await fetch(checkReadyUrl + '?course_id=' + courseId);
+                        if (!res.ok) throw new Error('HTTP ' + res.status);
+                        const data = await res.json();
+                        if (!data.ready) {
+                            checkAttempts++;
+                            if (checkAttempts >= maxCheckAttempts) {
+                                document.getElementById('ai-btn-send').disabled = false;
+                                document.getElementById('ai-btn-send').textContent = '🚀 Gửi câu hỏi';
+                                return;
+                            }
+                            document.getElementById('ai-btn-send').disabled = true;
+                            document.getElementById('ai-btn-send').textContent = '⏳ Đang lập chỉ mục tài liệu...';
+                            setTimeout(checkIndexStatus, 5000);
+                        } else {
+                            document.getElementById('ai-btn-send').disabled = false;
+                            document.getElementById('ai-btn-send').textContent = '🚀 Gửi câu hỏi';
+                        }
+                    } catch (e) {
+                        console.warn('AI Tutor: check_ready thất bại, fallback enable button.', e);
+                        document.getElementById('ai-btn-send').disabled = false;
+                        document.getElementById('ai-btn-send').textContent = '🚀 Gửi câu hỏi';
+                    }
+                }
+                checkIndexStatus();
 
                 function renderContent(sender, text) {
                     if (sender === 'user') {
