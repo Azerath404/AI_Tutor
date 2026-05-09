@@ -51,3 +51,27 @@
 [2026-05-06 16:04:06][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
 [2026-05-06 16:04:14][INFO] OK: Model 'llama3.2' loaded thanh cong trong 7.1s. Keep-alive=120m.
 [2026-05-06 16:04:14][INFO] === AI Tutor Ollama Warm-up END ===
+[2026-05-07 07:58:54][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-07 07:58:54][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: False
+[2026-05-07 07:58:54][INFO] Dang cho Ollama service san sang...
+[2026-05-07 07:59:45][INFO] Ollama san sang (sau 24 giay).
+[2026-05-07 07:59:46][INFO] Dang load model 'llama3.2' vao RAM... (startup)
+[2026-05-07 07:59:46][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
+[2026-05-07 07:59:52][INFO] OK: Model 'llama3.2' loaded thanh cong trong 6.3s. Keep-alive=120m.
+[2026-05-07 07:59:52][INFO] === AI Tutor Ollama Warm-up END ===
+[2026-05-09 08:36:39][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-09 08:36:39][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: False
+[2026-05-09 08:36:39][INFO] Dang cho Ollama service san sang...
+[2026-05-09 08:37:29][INFO] Ollama san sang (sau 24 giay).
+[2026-05-09 08:37:30][INFO] Dang load model 'llama3.2' vao RAM... (startup)
+[2026-05-09 08:37:30][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
+[2026-05-09 08:37:36][INFO] OK: Model 'llama3.2' loaded thanh cong trong 5.9s. Keep-alive=120m.
+[2026-05-09 08:37:36][INFO] === AI Tutor Ollama Warm-up END ===
+[2026-05-09 16:12:23][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-09 16:12:23][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: False
+[2026-05-09 16:12:23][INFO] Dang cho Ollama service san sang...
+[2026-05-09 16:13:42][INFO] Ollama san sang (sau 39 giay).
+[2026-05-09 16:13:43][INFO] Dang load model 'llama3.2' vao RAM... (startup)
+[2026-05-09 16:13:43][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
+[2026-05-09 16:13:49][INFO] OK: Model 'llama3.2' loaded thanh cong trong 6s. Keep-alive=120m.
+[2026-05-09 16:13:49][INFO] === AI Tutor Ollama Warm-up END ===

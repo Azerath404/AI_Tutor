@@ -41,6 +41,7 @@ class rag_engine {
      *  - Dedup theo filename: chỉ lấy chunk tốt nhất của mỗi file (GROUP BY filename).
      *  - BOOLEAN MODE: tránh MySQL bỏ qua từ xuất hiện > 50% rows (Natural Language mode).
      *  - Dùng $normalizedQuery cho cả SQL lẫn cache key để kết quả nhất quán.
+     *  - Metadata Boosting: Bóc tách tên file từ câu hỏi và cộng điểm (boost) ưu tiên trong SQL.
      *
      * @param  int    $courseid ID khóa học hiện tại.
      * @param  string $query    Câu hỏi của sinh viên.
@@ -61,20 +62,38 @@ class rag_engine {
         }
 
         try {
+            // Metadata Boosting: Bóc tách tên file từ câu hỏi để cộng điểm ưu tiên
+            $boost_sql = "";
+            $boost_params = [];
+            
+            // Regex nhận diện tên file có đuôi phổ biến (hỗ trợ Unicode tiếng Việt)
+            if (preg_match_all('/([\p{L}\p{N}_\-]+\.(?:pdf|docx?|pptx?|xlsx?|txt|md|csv))/ui', $query, $matches)) {
+                $mentioned_files = array_unique($matches[1]);
+                $boost_conditions = [];
+                foreach ($mentioned_files as $file) {
+                    $boost_conditions[] = "LOWER(filename) LIKE ?";
+                    $boost_params[] = '%' . mb_strtolower($file, 'UTF-8') . '%';
+                }
+                if (!empty($boost_conditions)) {
+                    $boost_sql = " + IF(" . implode(" OR ", $boost_conditions) . ", 5.0, 0.0)";
+                }
+            }
+
             // Lấy chunk có relevance cao nhất cho mỗi file (dedup theo filename).
             // Tại sao dedup? Chunking có overlap → nhiều chunk cùng file → nội dung trùng nhau
             // → prompt phình to, tốn prefill time, không thêm thông tin mới cho AI.
             // BOOLEAN MODE: tránh MySQL tự loại từ xuất hiện > 50% rows.
             $sql = "SELECT filename, content,
-                           MAX(MATCH(content) AGAINST(? IN BOOLEAN MODE)) as relevance
+                           (MAX(MATCH(content) AGAINST(? IN BOOLEAN MODE)){$boost_sql}) as relevance
                     FROM {block_ai_tutor_chunks}
                     WHERE courseid = ?
                       AND MATCH(content) AGAINST(? IN BOOLEAN MODE)
                     GROUP BY filename
                     ORDER BY relevance DESC
-                    LIMIT 3";
+                    LIMIT 15";
 
-            $records = $DB->get_records_sql($sql, [$normalizedQuery, $courseid, $normalizedQuery]);
+            $params = array_merge([$normalizedQuery], $boost_params, [$courseid, $normalizedQuery]);
+            $records = $DB->get_records_sql($sql, $params);
 
             if (empty($records)) {
                 // Fallback: FULLTEXT không khớp → lấy 2 chunk bất kỳ để AI không trả lời rỗng
