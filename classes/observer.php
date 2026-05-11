@@ -66,7 +66,19 @@ class observer {
             $task->set_custom_data(['courseid' => $courseid]);
             \core\task\manager::queue_adhoc_task($task, true);
 
-            error_log("AI Tutor: Đã queue re-index task cho Course ID: " . $courseid);
+            // [Opt E] KÍCH HOẠT CHẠY TASK BACKGROUND NGAY LẬP TỨC (Không block UI)
+            // Khắc phục lỗi ở XAMPP/Local khi người dùng không cài đặt Cron.
+            // Đoạn code này mở 1 tiến trình ngầm (fire-and-forget) để Moodle xử lý PDF ngay lập tức.
+            global $CFG;
+            $script = $CFG->dirroot . '/admin/cli/adhoc_task.php';
+            if (PHP_OS_FAMILY === 'Windows') {
+                $cmd = 'start /B "" php.exe "' . $script . '" --execute > NUL 2> NUL';
+            } else {
+                $cmd = 'nohup php "' . $script . '" --execute > /dev/null 2>&1 &';
+            }
+            pclose(popen($cmd, 'r'));
+
+            error_log("AI Tutor: Đã queue re-index task cho Course ID: " . $courseid . " và kích hoạt background worker.");
         }
     }
 }
