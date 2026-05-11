@@ -30,6 +30,4 @@ DANG_KY_TASK_SCHEDULER.bat
 register_task_direct.ps1
 register_task.ps1
 ollama_warmup.ps1
-log_files.txt
-prompt_debug.txt
-request_log.txt
+local_cache/
