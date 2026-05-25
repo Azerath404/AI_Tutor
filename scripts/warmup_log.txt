@@ -83,3 +83,27 @@
 [2026-05-10 08:39:21][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
 [2026-05-10 08:39:27][INFO] OK: Model 'llama3.2' loaded thanh cong trong 5.7s. Keep-alive=120m.
 [2026-05-10 08:39:27][INFO] === AI Tutor Ollama Warm-up END ===
+[2026-05-11 19:49:02][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-11 19:49:02][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: False
+[2026-05-11 19:49:02][INFO] Dang cho Ollama service san sang...
+[2026-05-11 19:50:45][INFO] Ollama san sang (sau 51 giay).
+[2026-05-11 19:50:45][INFO] Dang load model 'llama3.2' vao RAM... (startup)
+[2026-05-11 19:50:45][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
+[2026-05-11 19:50:50][INFO] OK: Model 'llama3.2' loaded thanh cong trong 5.1s. Keep-alive=120m.
+[2026-05-11 19:50:50][INFO] === AI Tutor Ollama Warm-up END ===
+[2026-05-12 07:54:46][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-12 07:54:46][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: False
+[2026-05-12 07:54:46][INFO] Dang cho Ollama service san sang...
+[2026-05-12 07:57:19][INFO] Ollama san sang (sau 75 giay).
+[2026-05-12 07:57:20][INFO] Dang load model 'llama3.2' vao RAM... (startup)
+[2026-05-12 07:57:20][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
+[2026-05-12 07:57:32][INFO] OK: Model 'llama3.2' loaded thanh cong trong 10.9s. Keep-alive=120m.
+[2026-05-12 07:57:32][INFO] === AI Tutor Ollama Warm-up END ===
+[2026-05-13 19:27:34][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-13 19:27:34][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: False
+[2026-05-13 19:27:34][INFO] Dang cho Ollama service san sang...
+[2026-05-13 19:30:31][INFO] Ollama san sang (sau 87 giay).
+[2026-05-13 19:30:35][INFO] Dang load model 'llama3.2' vao RAM... (startup)
+[2026-05-13 19:30:35][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
+[2026-05-13 19:30:46][INFO] OK: Model 'llama3.2' loaded thanh cong trong 10.5s. Keep-alive=120m.
+[2026-05-13 19:30:46][INFO] === AI Tutor Ollama Warm-up END ===

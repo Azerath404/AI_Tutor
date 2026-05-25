@@ -54,7 +54,7 @@ class rag_engine {
         // → "Thuật toán?" và "thuật toán" → cùng cache key + cùng kết quả SQL
         $normalizedQuery = $this->normalize_query($query);
         $cache    = \cache::make('block_ai_tutor', 'rag_context');
-        $cacheKey = $courseid . '_' . md5($normalizedQuery);
+        $cacheKey = 'v3_' . $courseid . '_' . md5($normalizedQuery);
 
         $cached = $cache->get($cacheKey);
         if ($cached !== false) {
@@ -103,6 +103,31 @@ class rag_engine {
                     [$courseid]
                 );
                 $records = $fallback;
+            } else {
+                // [Opt] PHP Reranking: Chấm điểm lại 15 chunk từ MySQL bằng TF (Term Frequency) nội bộ
+                $scored_records = [];
+                $keywords = array_filter(explode(' ', $normalizedQuery));
+                
+                foreach ($records as $record) {
+                    $score = (float)$record->relevance;
+                    $content_lower = mb_strtolower($record->content, 'UTF-8');
+                    
+                    foreach ($keywords as $kw) {
+                        if (mb_strlen($kw, 'UTF-8') > 2) {
+                            $score += substr_count($content_lower, $kw) * 0.5;
+                        }
+                    }
+                    $record->final_score = $score;
+                    $scored_records[] = $record;
+                }
+                
+                // Sắp xếp lại theo điểm mới
+                usort($scored_records, function($a, $b) {
+                    return $b->final_score <=> $a->final_score;
+                });
+                
+                // Chỉ lấy 3 chunk tốt nhất để nhét vào prompt, giữ context ngắn gọn cho Intel Iris Xe
+                $records = array_slice($scored_records, 0, 3);
             }
 
             $context = "";

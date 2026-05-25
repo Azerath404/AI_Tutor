@@ -101,23 +101,8 @@ async def run_benchmark():
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=4)
 
-        generate_latex_table(results)
         await browser.close()
 
-def generate_latex_table(data):
-    print("\n--- MÃ LATEX CHO BÀI BÁO ICT 2026 ---")
-    print("\\begin{table}[H]")
-    print("\\centering")
-    print("\\caption{Kết quả đo lường độ trễ phản hồi thực tế (Latency)}")
-    print("\\label{tab:real_latency}")
-    print("\\begin{tabular}{|c|c|c|c|}")
-    print("\\hline")
-    print("Lần thử & Trạng thái & Độ trễ (s) & Ghi chú \\\\ \\hline")
-    for item in data:
-        note = "Nạp mô hình" if item["type"] == "Cold Start" else "Hiệu năng ổn định"
-        print(f"{item['run']} & {item['type']} & {item['latency']} & {note} \\\\ \\hline")
-    print("\\end{tabular}")
-    print("\\end{table}")
 
 if __name__ == "__main__":
     asyncio.run(run_benchmark())
