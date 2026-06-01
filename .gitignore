@@ -32,3 +32,6 @@ register_task.ps1
 ollama_warmup.ps1
 local_cache/
 data/
+AGENTS.md
+CODEBASE.md
+docs/

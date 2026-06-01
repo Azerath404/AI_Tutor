@@ -79,31 +79,50 @@ class rag_engine {
                 }
             }
 
-            // Lấy chunk có relevance cao nhất cho mỗi file (dedup theo filename).
-            // Tại sao dedup? Chunking có overlap → nhiều chunk cùng file → nội dung trùng nhau
-            // → prompt phình to, tốn prefill time, không thêm thông tin mới cho AI.
-            // BOOLEAN MODE: tránh MySQL tự loại từ xuất hiện > 50% rows.
-            $sql = "SELECT filename, content,
-                           (MAX(MATCH(content) AGAINST(? IN BOOLEAN MODE)){$boost_sql}) as relevance
+            // Tìm danh sách khóa học liên quan (bao gồm cả hiện tại và môn học tiên quyết)
+            $course_ids = [$courseid];
+            $prereqs = $DB->get_records('block_ai_tutor_course_deps', ['course_id' => $courseid]);
+            if (!empty($prereqs)) {
+                foreach ($prereqs as $prereq) {
+                    $course_ids[] = (int)$prereq->prerequisite_id;
+                }
+            }
+            $course_ids = array_unique($course_ids);
+            list($insql, $inparams) = $DB->get_in_or_equal($course_ids);
+
+            // Lấy các chunks có relevance tốt nhất trước (không GROUP BY trong SQL)
+            // Giải quyết triệt để lỗi ONLY_FULL_GROUP_BY của MySQL và lấy đúng chunk khớp nhất.
+            $sql = "SELECT id, filename, content,
+                           (MATCH(content) AGAINST(? IN BOOLEAN MODE){$boost_sql}) as relevance
                     FROM {block_ai_tutor_chunks}
-                    WHERE courseid = ?
+                    WHERE courseid {$insql}
                       AND MATCH(content) AGAINST(? IN BOOLEAN MODE)
-                    GROUP BY filename
                     ORDER BY relevance DESC
-                    LIMIT 15";
+                    LIMIT 40";
 
-            $params = array_merge([$normalizedQuery], $boost_params, [$courseid, $normalizedQuery]);
-            $records = $DB->get_records_sql($sql, $params);
+            $params = array_merge([$normalizedQuery], $boost_params, $inparams, [$normalizedQuery]);
+            $all_records = $DB->get_records_sql($sql, $params);
 
-            if (empty($records)) {
+            if (empty($all_records)) {
                 // Fallback: FULLTEXT không khớp → lấy 2 chunk bất kỳ để AI không trả lời rỗng
                 $fallback = $DB->get_records_sql(
-                    "SELECT filename, content FROM {block_ai_tutor_chunks}
-                     WHERE courseid = ? GROUP BY filename LIMIT 2",
-                    [$courseid]
+                    "SELECT id, filename, content FROM {block_ai_tutor_chunks}
+                     WHERE courseid {$insql} LIMIT 2",
+                    $inparams
                 );
                 $records = $fallback;
             } else {
+                // Thực hiện deduplicate theo filename trong PHP
+                $records = [];
+                foreach ($all_records as $record) {
+                    if (!isset($records[$record->filename])) {
+                        $records[$record->filename] = $record;
+                    }
+                    if (count($records) >= 15) {
+                        break;
+                    }
+                }
+
                 // [Opt] PHP Reranking: Chấm điểm lại 15 chunk từ MySQL bằng TF (Term Frequency) nội bộ
                 $scored_records = [];
                 $keywords = array_filter(explode(' ', $normalizedQuery));

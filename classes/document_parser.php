@@ -363,12 +363,28 @@ class document_parser {
         $len         = mb_strlen($text);
         $step        = $chunk_limit - $overlap;
 
-        for ($i = 0; $i < $len; $i += $step) {
-            $sub_text = mb_substr($text, $i, $chunk_limit);
+        $i = 0;
+        while ($i < $len) {
+            if ($i + $chunk_limit >= $len) {
+                $sub_text = mb_substr($text, $i);
+                $i = $len;
+            } else {
+                // Cắt thô
+                $sub_text = mb_substr($text, $i, $chunk_limit);
+                // Tìm khoảng trắng lùi lại tối đa 50 ký tự để tránh bẻ đôi từ
+                $last_space = mb_strrpos($sub_text, ' ');
+                if ($last_space !== false && $last_space > ($chunk_limit - 50)) {
+                    $sub_text = mb_substr($sub_text, 0, $last_space);
+                    $i += $last_space - $overlap; // Điều chỉnh step theo khoảng trắng thực tế
+                } else {
+                    $i += $step;
+                }
+            }
+
             if (mb_strlen(trim($sub_text)) > 20) {
                 $chunks[] = [
                     'file'    => $filename,
-                    'content' => "[Nguồn: $filename]\n" . $sub_text,
+                    'content' => "[Nguồn: $filename]\n" . trim($sub_text),
                 ];
             }
         }
