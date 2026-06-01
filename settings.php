@@ -53,4 +53,22 @@ if ($ADMIN->fulltree) {
         '1000',
         PARAM_INT
     ));
+
+    // 7. CPU Threads
+    $settings->add(new admin_setting_configtext(
+        'block_ai_tutor/ollama_num_thread',
+        'Ollama CPU Threads',
+        'Số luồng xử lý CPU tối ưu cho Ollama (Mặc định: 6).',
+        '6',
+        PARAM_INT
+    ));
+
+    // 8. Context Window
+    $settings->add(new admin_setting_configtext(
+        'block_ai_tutor/ollama_num_ctx',
+        'Ollama Context Window',
+        'Kích thước Context Window cho mô hình (Mặc định: 2048).',
+        '2048',
+        PARAM_INT
+    ));
 }

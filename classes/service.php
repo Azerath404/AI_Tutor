@@ -13,6 +13,10 @@ class service {
     private $temperature;
     /** @var int */
     private $max_tokens;
+    /** @var int */
+    private $num_thread;
+    /** @var int */
+    private $num_ctx;
     /** @var llm_client */
     private $llm_client;
     /** @var repository */
@@ -25,6 +29,8 @@ class service {
     public function __construct() {
         $this->temperature = (float)get_config('block_ai_tutor', 'ollama_temperature') ?: 0.7;
         $this->max_tokens  = (int)get_config('block_ai_tutor', 'ollama_maxtokens') ?: 2500;
+        $this->num_thread  = (int)get_config('block_ai_tutor', 'ollama_num_thread') ?: 6;
+        $this->num_ctx     = (int)get_config('block_ai_tutor', 'ollama_num_ctx') ?: 2048;
 
         $this->repo       = new repository();
         $this->doc_parser = new document_parser();
@@ -100,18 +106,12 @@ class service {
             'keep_alive' => '120m',
             'options'    => [
                 // ── CPU Thread Tuning ────────────────────────────────────────
-                // i7-1165G7: 4 P-cores × 2 HT = 8 logical. Dùng 6 thay vì 8:
-                // 8 threads gây OS scheduling contention với Apache threads khác.
-                // Benchmark thực tế trên Iris Xe: 6 threads cho throughput tốt hơn.
-                'num_thread'     => 6,
+                // Thiết lập từ cấu hình hoặc mặc định 6
+                'num_thread'     => $this->num_thread,
 
                 // ── Context Window ───────────────────────────────────────────
-                // Giảm từ 4096 → 2048:
-                // - Prefill time tỉ lệ TUYẾN TÍNH với num_ctx: 4096 ≈ 2× chậm hơn 2048.
-                // - RAG 4 chunks × 300 từ ≈ 1200 tokens + system prompt ≈ 400 tokens
-                //   → tổng ~1600 tokens, vẫn nằm trong 2048 an toàn.
-                // - Tiết kiệm ~30-40 giây thời gian prefill.
-                'num_ctx'        => 2048,
+                // Thiết lập từ cấu hình hoặc mặc định 2048
+                'num_ctx'        => $this->num_ctx,
 
                 // ── Output Length ────────────────────────────────────────────
                 // Giảm từ 400 → 250 tokens:

@@ -73,8 +73,13 @@ class llm_client {
                     continue;
                 }
                 $obj = json_decode($line);
-                if ($obj && isset($obj->response)) {
-                    $callback($obj->response);
+                if ($obj) {
+                    if (isset($obj->error)) {
+                        throw new \Exception("Ollama API Error: " . $obj->error);
+                    }
+                    if (isset($obj->response)) {
+                        $callback($obj->response);
+                    }
                 }
             }
             return strlen($dataChunk);

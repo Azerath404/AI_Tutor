@@ -107,3 +107,11 @@
 [2026-05-13 19:30:35][INFO] NOTE: Voi Intel Iris Xe + llama3.2 co the mat 3-5 phut lan dau.
 [2026-05-13 19:30:46][INFO] OK: Model 'llama3.2' loaded thanh cong trong 10.5s. Keep-alive=120m.
 [2026-05-13 19:30:46][INFO] === AI Tutor Ollama Warm-up END ===
+[2026-05-27 22:21:06][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-27 22:21:06][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: False
+[2026-05-27 22:21:06][INFO] Dang cho Ollama service san sang...
+[2026-05-27 22:24:19][ERROR] LOI: Ollama khong phan hoi sau 90 giay.
+[2026-05-28 08:51:06][INFO] === AI Tutor Ollama Warm-up START ===
+[2026-05-28 08:51:06][INFO] Model: llama3.2 | URL: http://localhost:11434 | Watch mode: False
+[2026-05-28 08:51:06][INFO] Dang cho Ollama service san sang...
+[2026-05-28 08:54:15][ERROR] LOI: Ollama khong phan hoi sau 90 giay.

@@ -35,10 +35,7 @@ flush();
 global $USER, $DB;
 
 // gom tất cả log vào mảng, ghi 1 lần cuối request
-$debugPath = __DIR__ . '/data';
-if (!is_dir($debugPath)) {
-    @mkdir($debugPath, 0777, true);
-}
+$debugPath = make_temp_directory('block_ai_tutor/logs');
 $logBuffer = [];
 
 // Đăng ký shutdown handler: ghi log 1 lần duy nhất khi request kết thúc
