@@ -30,8 +30,8 @@ class warmup_ollama_model extends \core\task\adhoc_task {
                 // PHẢI khớp với num_ctx trong call_llm_stream (4096).
                 // Nếu warmup dùng num_ctx khác, Ollama reload KV cache khi nhận request thật.
                 'num_ctx'     => 4096,
-                // Giúp warmup cũng chạy đúng cấu hình CPU Iris Xe
-                'num_thread'  => 8,
+                // Giúp warmup cũng chạy đúng cấu hình CPU của máy chủ
+                'num_thread'  => (int)get_config('block_ai_tutor', 'ollama_num_thread') ?: 6,
             ],
         ]);
 
@@ -39,10 +39,15 @@ class warmup_ollama_model extends \core\task\adhoc_task {
         curl_setopt_array($ch, [
             CURLOPT_POST           => true,
             CURLOPT_POSTFIELDS     => $payload,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'ngrok-skip-browser-warning: true'
+            ],
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_TIMEOUT        => 130,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
         ]);
         $result   = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);

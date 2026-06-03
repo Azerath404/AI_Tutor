@@ -13,6 +13,10 @@ class service {
     private $temperature;
     /** @var int */
     private $max_tokens;
+    /** @var int */
+    private $num_thread;
+    /** @var int */
+    private $num_ctx;
     /** @var llm_client */
     private $llm_client;
     /** @var repository */
@@ -25,6 +29,8 @@ class service {
     public function __construct() {
         $this->temperature = (float)get_config('block_ai_tutor', 'ollama_temperature') ?: 0.7;
         $this->max_tokens  = (int)get_config('block_ai_tutor', 'ollama_maxtokens') ?: 2500;
+        $this->num_thread  = (int)get_config('block_ai_tutor', 'ollama_num_thread') ?: 6;
+        $this->num_ctx     = (int)get_config('block_ai_tutor', 'ollama_num_ctx') ?: 2048;
 
         $this->repo       = new repository();
         $this->doc_parser = new document_parser();
@@ -61,27 +67,27 @@ class service {
             return "Bạn là trợ lý ảo Moodle.";
         }
 
-        // 1. VAI TRÒ
+        // 1. VAI TRÒ (Tĩnh)
         $prompt  = "BẠN LÀ AI TUTOR TẠI NHA TRANG UNIVERSITY CHO MÔN: '{$course->fullname}'.\n";
         $prompt .= "NHIỆM VỤ: Trả lời dựa trên tài liệu bài giảng được cung cấp.\n";
         $prompt .= "TÍNH CÁCH: Thân thiện, xưng 'mình' - 'bạn'.\n\n";
 
-        // 2. DANH SÁCH FILE
-        $files        = $this->doc_parser->get_processed_files_list($course_id);
-        $file_list_str = !empty($files) ? "- " . implode("\n- ", $files) : "Chưa có tài liệu PDF.";
-
-        // 3. NGỮ CẢNH RAG
-        $final_context = $this->rag_engine->get_context($course_id, $question);
-
-        $prompt .= "[DANH SÁCH TÀI LIỆU CÓ SẴN]:\n" . $file_list_str . "\n\n";
-        $prompt .= "[KIẾN THỨC TRÍCH XUẤT]:\n<context>\n" . $final_context . "\n</context>\n\n";
-
-        // 4. QUY TẮC
+        // 2. QUY TẮC (Tĩnh)
         $prompt .= "--- QUY TẮC ---\n";
         $prompt .= "1. Chỉ dùng kiến thức trong [KIẾN THỨC TRÍCH XUẤT].\n";
         $prompt .= "2. Nếu không có thông tin, hãy nói 'Xin lỗi, mình không tìm thấy nội dung này trong bài giảng'.\n";
-        $prompt .= "3. TRÍCH DẪN NGUỒN: Dòng cuối cùng PHẢI là: (Nguồn tham khảo: <tên file>).\n";
-        $prompt .= "\nSinh viên đặt câu hỏi: {$user->firstname}.\n";
+        $prompt .= "3. TRÍCH DẪN NGUỒN: Dòng cuối cùng PHẢI là: (Nguồn tham khảo: <tên file>).\n\n";
+
+        // 3. DANH SÁCH FILE (Tĩnh)
+        $files        = $this->doc_parser->get_processed_files_list($course_id);
+        $file_list_str = !empty($files) ? "- " . implode("\n- ", $files) : "Chưa có tài liệu PDF.";
+        $prompt .= "[DANH SÁCH TÀI LIỆU CÓ SẴN]:\n" . $file_list_str . "\n\n";
+
+        // 4. NGỮ CẢNH RAG (Động, thay đổi theo câu hỏi)
+        $final_context = $this->rag_engine->get_context($course_id, $question);
+        $prompt .= "[KIẾN THỨC TRÍCH XUẤT]:\n<context>\n" . $final_context . "\n</context>\n\n";
+
+        $prompt .= "Sinh viên đặt câu hỏi: {$user->firstname}.\n";
 
         return $prompt;
     }
@@ -100,18 +106,12 @@ class service {
             'keep_alive' => '120m',
             'options'    => [
                 // ── CPU Thread Tuning ────────────────────────────────────────
-                // i7-1165G7: 4 P-cores × 2 HT = 8 logical. Dùng 6 thay vì 8:
-                // 8 threads gây OS scheduling contention với Apache threads khác.
-                // Benchmark thực tế trên Iris Xe: 6 threads cho throughput tốt hơn.
-                'num_thread'     => 6,
+                // Thiết lập từ cấu hình hoặc mặc định 6
+                'num_thread'     => $this->num_thread,
 
                 // ── Context Window ───────────────────────────────────────────
-                // Giảm từ 4096 → 2048:
-                // - Prefill time tỉ lệ TUYẾN TÍNH với num_ctx: 4096 ≈ 2× chậm hơn 2048.
-                // - RAG 4 chunks × 300 từ ≈ 1200 tokens + system prompt ≈ 400 tokens
-                //   → tổng ~1600 tokens, vẫn nằm trong 2048 an toàn.
-                // - Tiết kiệm ~30-40 giây thời gian prefill.
-                'num_ctx'        => 2048,
+                // Thiết lập từ cấu hình hoặc mặc định 2048
+                'num_ctx'        => $this->num_ctx,
 
                 // ── Output Length ────────────────────────────────────────────
                 // Giảm từ 400 → 250 tokens:
@@ -126,9 +126,7 @@ class service {
             ],
         ];
 
-
-        // Callback chỉ truyền chunk lên — KHÔNG flush ở đây.
-        // Flush duy nhất nằm ở ajax.php để tránh double-flush 2x mỗi token.
+        // Callback truyền chunk về ajax.php.
         $this->llm_client->stream_generation($data, function($chunk) use ($callback) {
             $callback($chunk);
         });

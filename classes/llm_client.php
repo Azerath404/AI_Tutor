@@ -35,8 +35,11 @@ class llm_client {
         $ch = curl_init($this->server_url . '/api/tags');
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 2,  // Fail nhanh
-            CURLOPT_TIMEOUT        => 3,
+            CURLOPT_CONNECTTIMEOUT => 5,  // Tăng lên để hỗ trợ kết nối qua Cloud Tunnel / Ngrok
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_HTTPHEADER     => ['ngrok-skip-browser-warning: true'],
+            CURLOPT_SSL_VERIFYPEER => false, // Bỏ qua xác thực SSL trên Windows XAMPP
+            CURLOPT_SSL_VERIFYHOST => false,
         ]);
         curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -53,11 +56,16 @@ class llm_client {
     public function stream_generation($data, $callback) {
         $ch = curl_init($this->server_url . '/api/generate');
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'ngrok-skip-browser-warning: true'
+        ]);
         // 10s: đủ thời gian cho Ollama đang bận load model thiết lập connection.
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($ch, CURLOPT_TIMEOUT, 300);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Bỏ qua xác thực SSL trên Windows XAMPP
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $dataChunk) use ($callback) {
             static $innerBuffer = "";
             $innerBuffer .= $dataChunk;
@@ -73,13 +81,26 @@ class llm_client {
                     continue;
                 }
                 $obj = json_decode($line);
-                if ($obj && isset($obj->response)) {
-                    $callback($obj->response);
+                if ($obj) {
+                    if (isset($obj->error)) {
+                        throw new \Exception("Ollama API Error: " . $obj->error);
+                    }
+                    $response = isset($obj->response) ? $obj->response : '';
+                    $context = isset($obj->context) ? $obj->context : null;
+                    if (isset($obj->response) || isset($obj->context)) {
+                        $callback($response, $context);
+                    }
                 }
             }
             return strlen($dataChunk);
         });
-        curl_exec($ch);
+        
+        $res = curl_exec($ch);
+        if ($res === false) {
+            $err = curl_error($ch);
+            curl_close($ch);
+            throw new \Exception("cURL Error: " . $err);
+        }
         curl_close($ch);
     }
 }

@@ -23,14 +23,12 @@ class rag_engine {
      */
     private function normalize_query(string $query): string {
         $q = mb_strtolower(trim($query), 'UTF-8');
-        // Gộp nhiều khoảng trắng thành một.
-        // ?? $q: preg_replace() trả về null nếu PCRE lỗi (vd: UTF-8 không hợp lệ)
-        // → fallback giữ nguyên $q thay vì để hàm trả về null (gây TypeError).
-        $q = preg_replace('/\s+/', ' ', $q) ?? $q;
-        // Bỏ dấu câu, giữ lại chữ cái Unicode (\p{L}), số (\p{N}) và khoảng trắng.
+        // Bỏ dấu câu, thay thế bằng khoảng trắng để tách từ, giữ lại chữ cái Unicode (\p{L}), số (\p{N}), dấu/accent (\p{M}) và khoảng trắng.
         // Flag /u bắt buộc để \p{L} hoạt động — cũng là nguyên nhân null khi PCRE fail.
-        $q = preg_replace('/[^\p{L}\p{N}\s]/u', '', $q) ?? $q;
-        return $q;
+        $q = preg_replace('/[^\p{L}\p{N}\p{M}\s]/u', ' ', $q) ?? $q;
+        // Gộp nhiều khoảng trắng thành một (sử dụng /u để tránh làm hỏng các byte như a0 của UTF-8).
+        $q = preg_replace('/\s+/u', ' ', $q) ?? $q;
+        return trim($q);
     }
 
     /**
@@ -62,48 +60,83 @@ class rag_engine {
         }
 
         try {
-            // Metadata Boosting: Bóc tách tên file từ câu hỏi để cộng điểm ưu tiên
+            // Metadata Boosting: Bóc tách tên file hoặc mã tài liệu từ câu hỏi để cộng điểm ưu tiên
             $boost_sql = "";
             $boost_params = [];
             
-            // Regex nhận diện tên file có đuôi phổ biến (hỗ trợ Unicode tiếng Việt)
+            $hints = [];
+            // 1. Nhận diện tên file có đuôi phổ biến (hỗ trợ Unicode tiếng Việt)
             if (preg_match_all('/([\p{L}\p{N}_\-]+\.(?:pdf|docx?|pptx?|xlsx?|txt|md|csv))/ui', $query, $matches)) {
-                $mentioned_files = array_unique($matches[1]);
-                $boost_conditions = [];
-                foreach ($mentioned_files as $file) {
-                    $boost_conditions[] = "LOWER(filename) LIKE ?";
-                    $boost_params[] = '%' . mb_strtolower($file, 'UTF-8') . '%';
-                }
-                if (!empty($boost_conditions)) {
-                    $boost_sql = " + IF(" . implode(" OR ", $boost_conditions) . ", 5.0, 0.0)";
+                foreach ($matches[1] as $m) {
+                    $hints[] = $m;
                 }
             }
+            // 2. Nhận diện từ đứng sau các từ khóa chỉ file/slide
+            if (preg_match_all('/(?:file|slide|tài liệu|chương|chủ đề|chu đề|sách)\s+([\p{L}\p{N}_\-\.]+)/ui', $query, $matches)) {
+                foreach ($matches[1] as $m) {
+                    $m = trim($m, ',.?!;:()[]');
+                    if (!empty($m) && !is_numeric($m)) {
+                        $hints[] = $m;
+                    }
+                }
+            }
+            // 3. Nhận diện mã tài liệu/chủ đề (ví dụ: c02.2, chude4)
+            if (preg_match_all('/\b(c\d+(?:\.\d+)?|chude\d+|chude_\d+|chu_de_\d+)\b/ui', $query, $matches)) {
+                foreach ($matches[1] as $m) {
+                    $hints[] = $m;
+                }
+            }
+            
+            $hints = array_unique(array_map(function($h) {
+                return mb_strtolower($h, 'UTF-8');
+            }, $hints));
 
-            // Lấy chunk có relevance cao nhất cho mỗi file (dedup theo filename).
-            // Tại sao dedup? Chunking có overlap → nhiều chunk cùng file → nội dung trùng nhau
-            // → prompt phình to, tốn prefill time, không thêm thông tin mới cho AI.
-            // BOOLEAN MODE: tránh MySQL tự loại từ xuất hiện > 50% rows.
-            $sql = "SELECT filename, content,
-                           (MAX(MATCH(content) AGAINST(? IN BOOLEAN MODE)){$boost_sql}) as relevance
+            $boost_conditions = [];
+            foreach ($hints as $file) {
+                $boost_conditions[] = "LOWER(filename) LIKE ?";
+                $boost_params[] = '%' . $file . '%';
+            }
+            if (!empty($boost_conditions)) {
+                // Tăng điểm boost lên 100.0 để tài liệu được chọn chắc chắn vượt qua các tài liệu nhiễu khác
+                $boost_sql = " + IF(" . implode(" OR ", $boost_conditions) . ", 100.0, 0.0)";
+            }
+
+            // Tìm danh sách khóa học liên quan (bao gồm cả hiện tại và môn học tiên quyết)
+            $course_ids = [$courseid];
+            $prereqs = $DB->get_records('block_ai_tutor_course_deps', ['course_id' => $courseid]);
+            if (!empty($prereqs)) {
+                foreach ($prereqs as $prereq) {
+                    $course_ids[] = (int)$prereq->prerequisite_id;
+                }
+            }
+            $course_ids = array_unique($course_ids);
+            list($insql, $inparams) = $DB->get_in_or_equal($course_ids);
+
+            // Lấy các chunks có relevance tốt nhất trước (không GROUP BY trong SQL)
+            // Giải quyết triệt để lỗi ONLY_FULL_GROUP_BY của MySQL và lấy đúng chunk khớp nhất.
+            $sql = "SELECT id, filename, content,
+                           (MATCH(content) AGAINST(? IN BOOLEAN MODE){$boost_sql}) as relevance
                     FROM {block_ai_tutor_chunks}
-                    WHERE courseid = ?
+                    WHERE courseid {$insql}
                       AND MATCH(content) AGAINST(? IN BOOLEAN MODE)
-                    GROUP BY filename
                     ORDER BY relevance DESC
-                    LIMIT 15";
+                    LIMIT 40";
 
-            $params = array_merge([$normalizedQuery], $boost_params, [$courseid, $normalizedQuery]);
-            $records = $DB->get_records_sql($sql, $params);
+            $params = array_merge([$normalizedQuery], $boost_params, $inparams, [$normalizedQuery]);
+            $all_records = $DB->get_records_sql($sql, $params);
 
-            if (empty($records)) {
+            if (empty($all_records)) {
                 // Fallback: FULLTEXT không khớp → lấy 2 chunk bất kỳ để AI không trả lời rỗng
                 $fallback = $DB->get_records_sql(
-                    "SELECT filename, content FROM {block_ai_tutor_chunks}
-                     WHERE courseid = ? GROUP BY filename LIMIT 2",
-                    [$courseid]
+                    "SELECT id, filename, content FROM {block_ai_tutor_chunks}
+                     WHERE courseid {$insql} LIMIT 2",
+                    $inparams
                 );
                 $records = $fallback;
             } else {
+                // Lấy 15 chunks có relevance tốt nhất từ database để chạy reranking (không loại bỏ trùng lặp tên file trước)
+                $records = array_slice($all_records, 0, 15);
+
                 // [Opt] PHP Reranking: Chấm điểm lại 15 chunk từ MySQL bằng TF (Term Frequency) nội bộ
                 $scored_records = [];
                 $keywords = array_filter(explode(' ', $normalizedQuery));

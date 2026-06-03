@@ -358,17 +358,36 @@ class document_parser {
      * @param array  &$chunks   Mảng tích lũy các chunk (pass by reference)
      */
     private function chunk_text(string $text, string $filename, array &$chunks): void {
-        $chunk_limit = 1200;
-        $overlap     = 150;
+        $chunk_limit = 600;
+        $overlap     = 80;
         $len         = mb_strlen($text);
         $step        = $chunk_limit - $overlap;
 
-        for ($i = 0; $i < $len; $i += $step) {
-            $sub_text = mb_substr($text, $i, $chunk_limit);
+        $i = 0;
+        while ($i < $len) {
+            if ($i + $chunk_limit >= $len) {
+                $sub_text = mb_substr($text, $i);
+                $i = $len;
+            } else {
+                // Cắt thô
+                $sub_text = mb_substr($text, $i, $chunk_limit);
+                // Tìm khoảng trắng lùi lại tối đa 50 ký tự để tránh bẻ đôi từ
+                $last_space = mb_strrpos($sub_text, ' ');
+                if ($last_space !== false && $last_space > ($chunk_limit - 50)) {
+                    $sub_text = mb_substr($sub_text, 0, $last_space);
+                    $i += $last_space - $overlap; // Điều chỉnh step theo khoảng trắng thực tế
+                } else {
+                    $i += $step;
+                }
+            }
+
             if (mb_strlen(trim($sub_text)) > 20) {
+                // Thêm phiên bản tách từ của tên file (thay _ . - bằng khoảng trắng)
+                // giúp MySQL FTS phân tách các từ khóa riêng lẻ để tìm kiếm chính xác (ví dụ: c02, ham, coban)
+                $clean_filename = str_replace(['_', '-', '.'], ' ', $filename);
                 $chunks[] = [
                     'file'    => $filename,
-                    'content' => "[Nguồn: $filename]\n" . $sub_text,
+                    'content' => "[Nguồn: $filename] ($clean_filename)\n" . trim($sub_text),
                 ];
             }
         }

@@ -18,14 +18,18 @@ header('Content-Type: application/json');
 try {
     $ollama_url = get_config('block_ai_tutor', 'ollama_url') ?: 'http://localhost:11434';
     $model      = get_config('block_ai_tutor', 'ollama_model') ?: 'llama3.2';
+    $num_thread = (int)get_config('block_ai_tutor', 'ollama_num_thread') ?: 6;
 
     // ── Hàm check /api/ps ─────────────────────────────────────────────────────
     $check_loaded = function() use ($ollama_url, $model) {
         $ch = curl_init($ollama_url . '/api/ps');
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 2,
-            CURLOPT_TIMEOUT        => 4,
+            CURLOPT_CONNECTTIMEOUT => 5, // Tăng lên cho kết nối qua Cloud Tunnel / Ngrok
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_HTTPHEADER     => ['ngrok-skip-browser-warning: true'],
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
         ]);
         $raw  = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -72,7 +76,7 @@ try {
         'options'    => [
             'num_predict' => 1,
             'num_ctx'     => 2048,
-            'num_thread'  => 6,
+            'num_thread'  => $num_thread,
         ],
     ]);
 
@@ -80,10 +84,15 @@ try {
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'ngrok-skip-browser-warning: true'
+        ],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 3,
-        CURLOPT_TIMEOUT        => 15,   // Chờ đủ: benchmark load = 5.5s, buffer 15s
+        CURLOPT_TIMEOUT        => 40,   // Tăng lên 40s để hỗ trợ nạp mô hình trên Google Colab / Cloudflare Tunnel (thường mất 15-25s)
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
     ]);
     $result  = curl_exec($ch);
     $errCode = curl_errno($ch);
