@@ -35,3 +35,6 @@ data/
 AGENTS.md
 CODEBASE.md
 docs/
+.codegraph/
+tests_browser/
+backup/

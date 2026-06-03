@@ -19,22 +19,15 @@ if ($ADMIN->fulltree) {
         PARAM_URL
     ));
 
-    // 4. Chọn Model (Dropdown)
-    $models = [
-        'llama3.2' => 'LLaMA 3.2 (Bản nhẹ, chạy nhanh trên Laptop)',
-        'llama3.2:1b' => 'LLaMA 3.2 1B (Bản siêu nhẹ)',
-        'llama3' => 'LLaMA 3 8B (Yêu cầu có Card đồ họa)',
-        'qwen2.5' => 'Qwen 2.5 (Hỗ trợ tiếng Việt rất tốt)',
-        'mistral' => 'Mistral 7B',
-    ];
-
-    $settings->add(new admin_setting_configselect(
+    // 4. Nhập Model (Dùng configtext để linh hoạt chạy các model trên Colab như qwen2.5:7b hoặc llama3:8b)
+    $settings->add(new admin_setting_configtext(
         'block_ai_tutor/ollama_model',
-        'Chọn Mô hình (Model)',
-        'Chọn mô hình đã được pull về máy trong Ollama.',
-        'llama3.2', 
-        $models
+        'Mô hình Ollama (Model)',
+        'Nhập tên chính xác của mô hình Ollama (ví dụ: llama3.2, llama3, qwen2.5, qwen2.5:7b, mistral). Hãy đảm bảo mô hình này đã được pull về máy chủ Ollama.',
+        'llama3.2',
+        PARAM_TEXT
     ));
+
 
     // 5. Temperature
     $settings->add(new admin_setting_configtext(

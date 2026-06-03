@@ -358,8 +358,8 @@ class document_parser {
      * @param array  &$chunks   Mảng tích lũy các chunk (pass by reference)
      */
     private function chunk_text(string $text, string $filename, array &$chunks): void {
-        $chunk_limit = 1200;
-        $overlap     = 150;
+        $chunk_limit = 600;
+        $overlap     = 80;
         $len         = mb_strlen($text);
         $step        = $chunk_limit - $overlap;
 
@@ -382,9 +382,12 @@ class document_parser {
             }
 
             if (mb_strlen(trim($sub_text)) > 20) {
+                // Thêm phiên bản tách từ của tên file (thay _ . - bằng khoảng trắng)
+                // giúp MySQL FTS phân tách các từ khóa riêng lẻ để tìm kiếm chính xác (ví dụ: c02, ham, coban)
+                $clean_filename = str_replace(['_', '-', '.'], ' ', $filename);
                 $chunks[] = [
                     'file'    => $filename,
-                    'content' => "[Nguồn: $filename]\n" . trim($sub_text),
+                    'content' => "[Nguồn: $filename] ($clean_filename)\n" . trim($sub_text),
                 ];
             }
         }

@@ -240,7 +240,7 @@ class block_ai_tutor extends block_base {
                             clearInterval(warmupTimer);
                             updateModelStatus('warming_up', '(thử gửi câu hỏi)');
                         }
-                    }, 20000); // Poll mỗi 20s (warmup_model.php blocking tối đa 15s, cần buffer)
+                    }, 45000); // Poll mỗi 45s (warmup_model.php blocking tối đa 40s, cần buffer tránh nghẽn request)
                 }
 
                 // Gọi warmup ngay khi trang load.
