@@ -17,7 +17,11 @@ SEND_BUTTON = "#ai-btn-send"
 RESPONSE_SELECTOR = ".ai-reply-content"
 
 PROMPTS = [
-    "Trong slide 9 của file C02.2, liệt kê 4 thông tin cần xác định khi viết hàm là gì?"
+    "Dựa trên tài liệu Chương 2 về Hàm, ở phần Đệ quy, hãy cho biết ví dụ về hàm tính giai thừa int GiaiThua(int n) được viết như thế nào trong slide? Cho biết cả 2 cách viết có điều kiện if khác nhau ra sao.",
+    "Trong tài liệu KTLT_C02.3_HamNangCao.pdf, phần hàm trả về tham chiếu có đưa ra một số chú ý về lỗi SAI khi sử dụng biến cục bộ. Hãy chỉ ra đoạn code ví dụ bị sai đó và cách sửa đúng.",
+    "Hãy tìm lỗi sai trong đoạn lệnh sau đây được trích từ phần bài tập của chương con trỏ nâng cao: int x[3][12]; int *ptr[12]; ptr = x;",
+    "Trong chương Xử lý tập tin (file KTLT_C05_TapTin.pdf), bài tập thực hành số 15 và 16 yêu cầu viết chương trình xử lý những bài toán cụ thể nào và ghi kết quả đi đâu?",
+    "Theo chương Kỹ thuật lập trình đệ quy, khi phân tích giải thuật và khử đệ quy, chúng ta thường sử dụng những công cụ hay cấu trúc nào để đưa bài toán đệ quy về bài toán không sử dụng đệ quy?"
 ]
 
 async def run_benchmark():
@@ -69,12 +73,13 @@ async def run_benchmark():
                 f"document.querySelectorAll('.ai-reply-content').length > {num_replies_before}"
             )
 
-            # Đợi Token đầu tiên (khi nó không còn chữ 'Đang xử lý tài liệu...')
+            # Đợi cho đến khi nhận được toàn bộ câu trả lời (kết thúc luồng stream)
             await page.wait_for_function(
                 '''() => {
                     const els = document.querySelectorAll('.ai-reply-content');
+                    if (els.length === 0) return false;
                     const last = els[els.length - 1];
-                    return last.innerText && !last.innerText.includes('Đang xử lý tài liệu...');
+                    return last.dataset.status === 'done' || last.dataset.status === 'error';
                 }''',
                 timeout=300000 # Đợi tối đa 300s (5 phút) cho Cold Start
             )

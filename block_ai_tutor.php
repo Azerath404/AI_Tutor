@@ -341,10 +341,14 @@ class block_ai_tutor extends block_base {
                         const reader = response.body.getReader();
                         const decoder = new TextDecoder("utf-8");
                         replyContent.innerHTML = ""; 
+                        replyContent.dataset.status = "streaming";
 
                         while (true) {
                             const { done, value } = await reader.read();
-                            if (done) break;
+                            if (done) {
+                                replyContent.dataset.status = "done";
+                                break;
+                            }
                             
                             const chunk = decoder.decode(value, { stream: true });
                             const lines = chunk.split("\\n\\n"); 
@@ -374,6 +378,7 @@ class block_ai_tutor extends block_base {
                         }
                     }).catch(err => {
                         replyContent.innerHTML = "❌ Lỗi kết nối máy chủ AI.";
+                        replyContent.dataset.status = "error";
                     });
                 }
 
